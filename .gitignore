@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Raw DepMap release files — over GitHub's 100 MiB limit, and
+# freely downloadable from depmap.org. See README for the release used.
+CRISPRGeneEffect.csv
+OmicsExpression*.csv
+Model.csv
+
+# Redundant archive
+data/processed/processed.zip
+
+# OS
+Thumbs.db
+.DS_Store
