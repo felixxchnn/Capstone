@@ -1,0 +1,102 @@
+{
+  "eval_split": "val",
+  "seed": 20260722,
+  "pca_components": 200,
+  "ridge_alphas": [
+    1.0,
+    3.16,
+    10.0,
+    31.6,
+    100.0,
+    316.0,
+    1000.0,
+    3162.0,
+    10000.0,
+    31623.0,
+    100000.0,
+    316228.0,
+    1000000.0
+  ],
+  "metric_note": "Spearman is computed per target across held-out cell lines, then averaged. Pooled correlation over all (line, target) pairs is not reported: it is dominated by between-target differences in mean effect and flatters models that have learned nothing about individual cell lines.",
+  "tasks": {
+    "crispr": {
+      "task": "crispr",
+      "eval_split": "val",
+      "n_targets": 4297,
+      "n_train_lines": 800,
+      "n_eval_lines": 170,
+      "models": {
+        "global_mean": {
+          "description": "Predicts each target's training mean for every line.",
+          "spearman_mean": null,
+          "spearman_median": null,
+          "spearman_q25": null,
+          "spearman_q75": null,
+          "spearman_frac_positive": null,
+          "spearman_n_targets_scored": 0,
+          "spearman_n_targets_undefined": 4297,
+          "r2_mean": -0.0066,
+          "r2_median": -0.0028,
+          "r2_q25": -0.0082,
+          "r2_q75": -0.0006,
+          "r2_frac_positive": 0.0,
+          "r2_n_targets_scored": 4297,
+          "r2_n_targets_undefined": 0
+        },
+        "lineage_mean": {
+          "description": "Predicts the training mean within each tissue lineage. Any model must beat this to have learned something beyond tissue identity.",
+          "spearman_mean": 0.15,
+          "spearman_median": 0.1461,
+          "spearman_q25": 0.0759,
+          "spearman_q75": 0.218,
+          "spearman_frac_positive": 0.9209,
+          "spearman_n_targets_scored": 4297,
+          "spearman_n_targets_undefined": 0,
+          "r2_mean": 0.0124,
+          "r2_median": 0.0037,
+          "r2_q25": -0.0327,
+          "r2_q75": 0.0436,
+          "r2_frac_positive": 0.5262,
+          "r2_n_targets_scored": 4297,
+          "r2_n_targets_undefined": 0
+        },
+        "ridge_pca": {
+          "description": "StandardScaler -> PCA -> multi-output Ridge.",
+          "n_components": 200,
+          "explained_variance_ratio": 0.7556,
+          "alpha_sweep": {
+            "1.0": 0.1658,
+            "3.16": 0.1658,
+            "10.0": 0.1659,
+            "31.6": 0.1661,
+            "100.0": 0.1668,
+            "316.0": 0.1688,
+            "1000.0": 0.1743,
+            "3162.0": 0.1864,
+            "10000.0": 0.2057,
+            "31623.0": 0.2229,
+            "100000.0": 0.2253,
+            "316228.0": 0.2127,
+            "1000000.0": 0.1965
+          },
+          "alpha_selected_on": "grouped 5-fold CV inside the training set",
+          "alpha": 100000.0,
+          "spearman_mean": 0.2356,
+          "spearman_median": 0.2302,
+          "spearman_q25": 0.1439,
+          "spearman_q75": 0.323,
+          "spearman_frac_positive": 0.9739,
+          "spearman_n_targets_scored": 4297,
+          "spearman_n_targets_undefined": 0,
+          "r2_mean": 0.069,
+          "r2_median": 0.0518,
+          "r2_q25": 0.013,
+          "r2_q75": 0.1081,
+          "r2_frac_positive": 0.8301,
+          "r2_n_targets_scored": 4297,
+          "r2_n_targets_undefined": 0
+        }
+      }
+    }
+  }
+}

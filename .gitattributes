@@ -1,0 +1,4 @@
+# Data artifacts are stored byte-exact: no end-of-line conversion on
+# checkin or checkout. This keeps the recorded SHA-256 checksums
+# verifiable after a clone on any platform.
+data/processed/** -text

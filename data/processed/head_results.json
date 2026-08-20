@@ -1,0 +1,106 @@
+{
+  "eval_split": "val",
+  "seed": 20260722,
+  "embedding_source": "geneformer_embeddings",
+  "embedding_dims": 768,
+  "mlp": {
+    "hidden": 256,
+    "alphas": [
+      0.001,
+      0.01,
+      0.1
+    ]
+  },
+  "metric_note": "Per-target Spearman across held-out cell lines, averaged. Computed by baseline.evaluate, the same function baseline.py uses, so head numbers and baseline numbers are the same measurement.",
+  "tasks": {
+    "crispr": {
+      "task": "crispr",
+      "eval_split": "val",
+      "embedding_dims": 768,
+      "n_targets": 4297,
+      "n_train_lines": 800,
+      "n_eval_lines": 170,
+      "models": {
+        "ridge_head": {
+          "description": "StandardScaler -> Ridge on Geneformer embeddings.",
+          "n_features": 768,
+          "alpha_sweep": {
+            "1.0": 0.0691,
+            "3.16": 0.084,
+            "10.0": 0.1017,
+            "31.6": 0.1224,
+            "100.0": 0.1451,
+            "316.0": 0.1666,
+            "1000.0": 0.1828,
+            "3162.0": 0.1907,
+            "10000.0": 0.1897,
+            "31623.0": 0.1825,
+            "100000.0": 0.1742,
+            "316228.0": 0.1688,
+            "1000000.0": 0.1664
+          },
+          "alpha_selected_on": "grouped 5-fold CV inside the training set",
+          "alpha": 3162.0,
+          "alpha_at_grid_boundary": false,
+          "spearman_mean": 0.2047,
+          "spearman_median": 0.198,
+          "spearman_q25": 0.1136,
+          "spearman_q75": 0.2884,
+          "spearman_frac_positive": 0.9593,
+          "spearman_n_targets_scored": 4297,
+          "spearman_n_targets_undefined": 0,
+          "r2_mean": 0.0523,
+          "r2_median": 0.0362,
+          "r2_q25": -0.0049,
+          "r2_q75": 0.0907,
+          "r2_frac_positive": 0.7219,
+          "r2_n_targets_scored": 4297,
+          "r2_n_targets_undefined": 0
+        },
+        "mlp_head": {
+          "description": "StandardScaler -> MLPRegressor on Geneformer embeddings.",
+          "n_features": 768,
+          "hidden_layer_sizes": [
+            256
+          ],
+          "alpha_sweep": {
+            "0.001": 0.1134,
+            "0.01": 0.1123,
+            "0.1": 0.1135
+          },
+          "alpha_selected_on": "grouped 5-fold CV inside the training set",
+          "alpha": 0.1,
+          "alpha_at_grid_boundary": true,
+          "spearman_mean": 0.1274,
+          "spearman_median": 0.1177,
+          "spearman_q25": 0.0429,
+          "spearman_q75": 0.1983,
+          "spearman_frac_positive": 0.8711,
+          "spearman_n_targets_scored": 4297,
+          "spearman_n_targets_undefined": 0,
+          "r2_mean": -0.1217,
+          "r2_median": -0.1281,
+          "r2_q25": -0.2136,
+          "r2_q75": -0.0391,
+          "r2_frac_positive": 0.1671,
+          "r2_n_targets_scored": 4297,
+          "r2_n_targets_undefined": 0
+        }
+      },
+      "baseline_reference": {
+        "ridge_pca_spearman_mean": 0.2356,
+        "lineage_mean_spearman_mean": 0.15
+      },
+      "deltas": {
+        "ridge_head": {
+          "vs_ridge_pca": -0.0309,
+          "vs_lineage_mean": 0.0547
+        },
+        "mlp_head": {
+          "vs_ridge_pca": -0.1082,
+          "vs_lineage_mean": -0.0226
+        }
+      }
+    }
+  }
+}

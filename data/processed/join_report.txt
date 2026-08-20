@@ -1,0 +1,120 @@
+==========================================================================
+DEPMAP DATASET BUILD REPORT
+==========================================================================
+
+This file records every filtering and intersection step that
+produced the modelling dataset. Cite these numbers in your
+methods section; they are the provenance of everything
+downstream.
+
+--------------------------------------------------------------------------
+1. EXPRESSION MATRIX
+--------------------------------------------------------------------------
+  file                                  : OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv
+  rows_raw                              : 1775
+  columns_raw                           : 19220
+  rows_before_default_filter            : 1775
+  rows_after_default_filter             : 1719
+  rows_dropped_non_default              : 56
+  duplicate_model_ids_dropped           : 0
+  metadata_columns_dropped              : ['SequencingID', 'ModelConditionID', 'IsDefaultEntryForMC', 'IsDefaultEntryForModel']
+  non_numeric_columns_dropped           : 0
+  cell_lines                            : 1719
+  gene_columns                          : 19215
+
+--------------------------------------------------------------------------
+2. CRISPR GENE EFFECT MATRIX
+--------------------------------------------------------------------------
+  file                                  : CRISPRGeneEffect.csv
+  rows_raw                              : 1208
+  columns_raw                           : 18531
+  duplicate_model_ids_dropped           : 0
+  non_numeric_columns_dropped           : 0
+  cell_lines                            : 1208
+  gene_columns                          : 18531
+
+--------------------------------------------------------------------------
+3. CELL LINE METADATA
+--------------------------------------------------------------------------
+  file                                  : Model.csv
+  rows_raw                              : 2154
+  columns_raw                           : 48
+  duplicate_model_ids_dropped           : 0
+  metadata_columns_missing              : []
+  cell_lines                            : 2154
+
+--------------------------------------------------------------------------
+4. PRISM DRUG RESPONSE (optional)
+--------------------------------------------------------------------------
+  file                                  : None
+  status                                : absent
+
+--------------------------------------------------------------------------
+5. GENE SPACE RECONCILIATION
+--------------------------------------------------------------------------
+  expression_columns_given              : 19215
+  expression_parsed                     : 19215
+  expression_unparsed                   : 0
+  expression_unparsed_examples          : []
+  expression_duplicate_entrez           : 0
+  crispr_columns_given                  : 18531
+  crispr_parsed                         : 18531
+  crispr_unparsed                       : 0
+  crispr_unparsed_examples              : []
+  crispr_duplicate_entrez               : 0
+  shared_genes                          : 18463
+  only_in_expression                    : 752
+  only_in_crispr                        : 68
+  symbol_conflicts                      : 0
+  symbol_conflict_examples              : []
+
+--------------------------------------------------------------------------
+6. EXPRESSION FEATURE FILTER
+--------------------------------------------------------------------------
+  genes_before                          : 18463
+  dropped_all_zero                      : 3
+  dropped_low_variance                  : 0
+  genes_after                           : 18460
+
+--------------------------------------------------------------------------
+7. SELECTIVE CRISPR TARGET SELECTION
+--------------------------------------------------------------------------
+  cell_lines_considered                 : 1140
+  genes_considered                      : 18463
+  dependency_threshold                  : -0.5
+  min_dependent_lines                   : 5
+  max_dependent_fraction                : 0.9
+  min_gene_effect_std                   : 0.15
+  max_gene_nan_fraction                 : 0.05
+  excluded_too_many_nans                : 896
+  excluded_never_essential              : 10265
+  excluded_pan_essential                : 992
+  excluded_low_variance                 : 12287
+  selective_genes_kept                  : 4297
+
+--------------------------------------------------------------------------
+8. CELL LINE INTERSECTION
+--------------------------------------------------------------------------
+  expression_lines                      : 1719
+  crispr_lines                          : 1208
+  metadata_lines                        : 2154
+  shared_expression_crispr_metadata     : 1140
+  lost_from_expression                  : 579
+  lost_from_crispr                      : 68
+
+--------------------------------------------------------------------------
+9. OSTEOSARCOMA COVERAGE
+--------------------------------------------------------------------------
+  bone_lineage_lines                    : 49
+  osteosarcoma_lines                    : 26
+  osteosarcoma_model_ids                : ['ACH-000082', 'ACH-000359', 'ACH-000364', 'ACH-000410', 'ACH-000748', 'ACH-001001'] ... (26 total)
+
+--------------------------------------------------------------------------
+10. FINAL DATASET
+--------------------------------------------------------------------------
+  cell_lines                            : 1140
+  expression_features                   : 18460
+  crispr_targets_all                    : 18463
+  crispr_targets_selective              : 4297
+  prism_compounds                       : 0
+  prism_cell_lines                      : 0
