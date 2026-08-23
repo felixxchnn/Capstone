@@ -3,6 +3,19 @@
 Week 1–2 of the capstone: a verified, leakage-checked dataset and a baseline
 number. Everything later is reported as a delta against that number.
 
+## Data and licences
+
+| Source | Version | Licence |
+|---|---|---|
+| [DepMap](https://depmap.org/) — expression, CRISPR gene effect, model metadata | DepMap Public **26Q1**, downloaded 2026-07-22 | CC BY 4.0 |
+| [Geneformer](https://huggingface.co/ctheodoris/Geneformer) — `Geneformer-V2-104M_CLcancer` | V2, Dec 2024 | Apache 2.0 |
+| [Osteosarcoma dataset](https://osteosarc.com) (Sid Sijbrandij) | — | CC0 1.0 |
+
+**Data citation.** DepMap, Broad (2026). DepMap Public 26Q1. Dataset. https://depmap.org
+
+Files in `data/processed/` are derived from DepMap Public 26Q1 and remain under CC BY 4.0.
+Code in this repository is MIT-licensed — see `LICENSE`.
+
 ---
 
 ## Quick start
