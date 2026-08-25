@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import sys
 import argparse
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -400,6 +401,127 @@ def run_ridge_pca(
 
 
 # --------------------------------------------------------------------------
+# Held-out prediction persistence
+# --------------------------------------------------------------------------
+# `evaluate` returns summary statistics and discards the per-target correlation
+# vectors that produced them. That is the right shape for a results file, but it
+# means every downstream question about uncertainty -- a bootstrap over held-out
+# cell lines, a paired test across targets, the correlation between two models'
+# per-target performance -- requires refitting both models just to recover
+# arrays that already existed in memory.
+#
+# These helpers write the held-out predictions and the matching truth matrix to
+# disk so that work becomes free. They are opt-in (`--save-predictions`): the
+# default run is unchanged, so the command that produced the published
+# baseline_results.json still produces exactly that file.
+
+def save_prediction_bundle(
+    predictions: dict,
+    processed_dir,
+    source: str,
+    eval_split: str,
+) -> list:
+    """
+    Write held-out predictions and the matching truth matrix to disk.
+
+    One matrix per (task, model) plus one truth matrix per task, each indexed by
+    ModelID with one column per target, written through io_utils.save_matrix so
+    they carry the same format and labelling discipline as every other matrix in
+    the project.
+
+    Files land in <processed_dir>/predictions/ rather than <processed_dir>
+    itself, so the fourteen-file integrity record for data/processed is
+    unaffected by turning this on.
+
+    Parameters
+    ----------
+    predictions
+        Bundle built by run_task when it is handed a `predictions_out` dict.
+    source
+        "baseline" or "head" -- keeps the two modules' outputs distinguishable.
+    eval_split
+        The split the predictions were made on. Part of the filename so a val
+        run and a test run cannot overwrite each other.
+
+    Returns
+    -------
+    List of paths actually written.
+    """
+    out_dir = Path(processed_dir) / "predictions"
+    written = []
+
+    for task, bundle in predictions.items():
+        index = pd.Index(bundle["eval_index"], name=config.MODEL_ID)
+        columns = bundle["target_columns"]
+
+        truth = pd.DataFrame(bundle["y_true"], index=index, columns=columns)
+        written.append(io_utils.save_matrix(
+            truth, out_dir / f"{source}_{task}_{eval_split}_y_true"
+        ))
+
+        for model_name, preds in bundle["models"].items():
+            frame = pd.DataFrame(preds, index=index, columns=columns)
+            written.append(io_utils.save_matrix(
+                frame, out_dir / f"{source}_{task}_{eval_split}_{model_name}"
+            ))
+
+    return written
+
+
+def verify_prediction_bundle(
+    predictions: dict,
+    results: dict,
+    processed_dir,
+    source: str,
+    eval_split: str,
+) -> bool:
+    """
+    Re-score the saved matrices from disk and compare to the in-memory metrics.
+
+    Without this the failure mode is silent. Predictions could be written with
+    the wrong row order, or a model's array captured from the wrong branch, and
+    the printed metrics would still be correct -- because they were computed
+    from the in-memory array, not from the file. Round-tripping is the only
+    check that the thing on disk is the thing that was scored.
+
+    Returns True if every saved model matrix re-scores to the recorded
+    spearman_mean, False otherwise.
+    """
+    out_dir = Path(processed_dir) / "predictions"
+    all_ok = True
+
+    for task, bundle in predictions.items():
+        task_block = results.get("tasks", {}).get(task)
+        if task_block is None:
+            continue
+
+        truth = io_utils.load_matrix(
+            out_dir / f"{source}_{task}_{eval_split}_y_true"
+        ).to_numpy(dtype=float)
+
+        for model_name in bundle["models"]:
+            recorded = task_block["models"].get(model_name, {}).get("spearman_mean")
+            reloaded = io_utils.load_matrix(
+                out_dir / f"{source}_{task}_{eval_split}_{model_name}"
+            ).to_numpy(dtype=float)
+            round_tripped = evaluate(truth, reloaded)["spearman_mean"]
+
+            if recorded is None and round_tripped is None:
+                ok = True
+            elif recorded is None or round_tripped is None:
+                ok = False
+            else:
+                ok = abs(float(recorded) - float(round_tripped)) < 1e-9
+
+            all_ok = all_ok and ok
+            status = "ok" if ok else "MISMATCH"
+            print(f"        {task}/{model_name:<14}: recorded {recorded} "
+                  f"-> reloaded {round_tripped}   [{status}]")
+
+    return all_ok
+
+
+# --------------------------------------------------------------------------
 # Orchestration
 # --------------------------------------------------------------------------
 
@@ -412,8 +534,16 @@ def run_task(
     assignment: pd.Series,
     metadata: pd.DataFrame,
     eval_split: str,
+    predictions_out: dict | None = None,
 ) -> dict | None:
-    """Run the full baseline ladder for one prediction task."""
+    """
+    Run the full baseline ladder for one prediction task.
+
+    If `predictions_out` is a dict it is filled in place with the held-out
+    predictions of every model, the matching truth matrix, and the row and
+    column labels needed to write them out. Passing None -- the default --
+    leaves behaviour byte-for-byte as it was before this parameter existed.
+    """
     prepared = prepare_task(
         task, expression, crispr, prism, selective_genes, assignment, eval_split
     )
@@ -456,10 +586,24 @@ def run_task(
         "models": {},
     }
 
+    # Truth matrix and labels are recorded once; each model appends its own
+    # prediction array below. Y_eval_raw is stored *unfilled*, with its NaNs
+    # intact, because per_target_spearman masks non-finite entries per column
+    # and imputing them here would silently change the metric downstream.
+    if predictions_out is not None:
+        predictions_out[task] = {
+            "eval_index": [str(i) for i in eval_index],
+            "target_columns": [str(c) for c in Y.columns],
+            "y_true": Y_eval_raw,
+            "models": {},
+        }
+
     # ---- 1. global mean ------------------------------------------------
     print("\n  [1/3] global mean (null model)")
     preds = run_global_mean(Y_train_raw, len(eval_index))
     metrics = evaluate(Y_eval_raw, preds)
+    if predictions_out is not None:
+        predictions_out[task]["models"]["global_mean"] = preds
     results["models"]["global_mean"] = {
         "description": "Predicts each target's training mean for every line.",
         **metrics,
@@ -481,6 +625,8 @@ def run_task(
         )
         preds = run_lineage_mean(Y_train_raw, lineage_train, lineage_eval)
         metrics = evaluate(Y_eval_raw, preds)
+        if predictions_out is not None:
+            predictions_out[task]["models"]["lineage_mean"] = preds
         results["models"]["lineage_mean"] = {
             "description": (
                 "Predicts the training mean within each tissue lineage. Any "
@@ -518,6 +664,8 @@ def run_task(
         train_groups=train_groups,
     )
     metrics = evaluate(Y_eval_raw, preds)
+    if predictions_out is not None:
+        predictions_out[task]["models"]["ridge_pca"] = preds
     results["models"]["ridge_pca"] = {
         "description": "StandardScaler -> PCA -> multi-output Ridge.",
         **info,
@@ -547,6 +695,17 @@ def main() -> int:
             "Which split to evaluate on. Default 'val'. Use 'test' only for "
             "the final reported number -- every extra look at the test set "
             "quietly turns it into a validation set."
+        ),
+    )
+    parser.add_argument(
+        "--save-predictions",
+        action="store_true",
+        help=(
+            "Also write the held-out prediction matrices and the matching "
+            "truth matrix to data/processed/predictions/, then re-score them "
+            "from disk to prove the files match what was reported. Off by "
+            "default, so the plain command remains the one that produced the "
+            "published baseline_results.json."
         ),
     )
     args = parser.parse_args()
@@ -602,10 +761,13 @@ def main() -> int:
         "tasks": {},
     }
 
+    predictions_out: dict | None = {} if args.save_predictions else None
+
     for task in ("crispr", "prism"):
         result = run_task(
             task, expression, crispr, prism, selective_genes,
             assignment, metadata, args.split,
+            predictions_out=predictions_out,
         )
         if result is not None:
             all_results["tasks"][task] = result
@@ -615,6 +777,26 @@ def main() -> int:
         return 1
 
     path = io_utils.save_json(all_results, out / "baseline_results.json")
+
+    # ---- optional: persist held-out predictions, then prove they round-trip
+    if predictions_out:
+        print(f"\n{'=' * 74}")
+        print("SAVING HELD-OUT PREDICTIONS")
+        print("=" * 74)
+        written = save_prediction_bundle(
+            predictions_out, out, "baseline", args.split
+        )
+        print(f"\n  {len(written)} file(s) written to {out / 'predictions'}")
+        print("\n  Round-trip check -- re-scoring each matrix from disk:")
+        ok = verify_prediction_bundle(
+            predictions_out, all_results, out, "baseline", args.split
+        )
+        if ok:
+            print("\n  All saved matrices re-score to the reported values.")
+        else:
+            print("\n  *** MISMATCH: at least one saved matrix does not re-score")
+            print("      to the value reported above. Do not use these files.")
+            return 1
 
     # ---------------------------------------------------------- summary
     print(f"\n{'=' * 74}")

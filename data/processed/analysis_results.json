@@ -1,0 +1,148 @@
+{
+  "eval_split": "val",
+  "task": "crispr",
+  "seed": 20260722,
+  "bootstrap_seed": 20260722,
+  "prediction_source": "saved matrices",
+  "n_cell_lines": 170,
+  "n_targets": 4297,
+  "n_train_lines": 800,
+  "models_analysed": [
+    "global_mean",
+    "lineage_mean",
+    "ridge_head",
+    "ridge_pca"
+  ],
+  "A1_bootstrap": {
+    "n_resamples": 1000,
+    "seed": 20260722,
+    "resampling_unit": "held-out cell line",
+    "n_cell_lines": 170,
+    "tie_note": "Resampling with replacement duplicates cell lines and therefore introduces ties into the per-target rank correlation. scipy's spearmanr handles ties by averaging ranks, so the computation is correct, but the tie behaviour is a property of the method and must be disclosed in the methods section.",
+    "per_model": {
+      "ridge_pca": {
+        "n_draws": 1000,
+        "mean": 0.2344,
+        "std_error": 0.008,
+        "ci_level": 95.0,
+        "ci_low": 0.2188,
+        "ci_high": 0.2505
+      },
+      "ridge_head": {
+        "n_draws": 1000,
+        "mean": 0.2036,
+        "std_error": 0.0079,
+        "ci_level": 95.0,
+        "ci_low": 0.1881,
+        "ci_high": 0.2198
+      },
+      "lineage_mean": {
+        "n_draws": 1000,
+        "mean": 0.149,
+        "std_error": 0.0086,
+        "ci_level": 95.0,
+        "ci_low": 0.133,
+        "ci_high": 0.1654
+      }
+    },
+    "delta_head_minus_baseline": {
+      "n_draws": 1000,
+      "mean": -0.0308,
+      "std_error": 0.0028,
+      "ci_level": 95.0,
+      "ci_low": -0.0365,
+      "ci_high": -0.0255
+    },
+    "share_of_expression_gain": {
+      "n_draws": 1000,
+      "mean": 0.6373,
+      "std_error": 0.039,
+      "ci_level": 95.0,
+      "ci_low": 0.5561,
+      "ci_high": 0.708,
+      "definition": "(head rho - lineage rho) / (baseline rho - lineage rho), recomputed inside every bootstrap resample. The fraction of the gain that raw expression buys over tissue identity alone which the embeddings recover. More interpretable than a raw difference of correlations, and unlike that difference it is expressed on a scale a non-specialist audience can read.",
+      "caveat": "lineage_mean is not a zero-information floor, so this is a share of a gain over tissue identity, not a share of all available signal. It also inherits the noise of three estimates rather than two, which is why it is reported with its own interval."
+    }
+  },
+  "A2_A3_paired_over_targets": {
+    "reference_model": "ridge_pca",
+    "candidate_model": "ridge_head",
+    "n_targets_total": 4297,
+    "n_targets_paired": 4297,
+    "n_targets_dropped": 0,
+    "mean_reference_rho": 0.2356,
+    "mean_candidate_rho": 0.2047,
+    "mean_difference": -0.0309,
+    "median_difference": -0.0304,
+    "frac_targets_candidate_wins": 0.2465,
+    "frac_targets_tied": 0.0,
+    "wilcoxon": {
+      "statistic": 1664390.0,
+      "p_value": 1.2503262533471325e-288,
+      "caveat": "Gene dependencies are correlated -- co-essential genes move together -- so the effective number of independent targets is well below n_targets_paired and this p-value is optimistic. Report it with this sentence attached. The bootstrap over held-out cell lines is the stronger evidence."
+    },
+    "per_target_rho_correlation": {
+      "pearson_r": 0.9283,
+      "pearson_p": 0.0,
+      "spearman_r": 0.9189,
+      "spearman_p": 0.0,
+      "reading": "High correlation means the two models succeed and fail on the same targets, which supports reading the embeddings as a lossier compression of the same signal. Low correlation means they carry different information rather than less of it."
+    }
+  },
+  "A4_effective_degrees_of_freedom": {
+    "convention": "trace of the ridge hat matrix, sum s_i^2 / (s_i^2 + alpha), where s_i are the singular values of the centred design matrix the Ridge estimator receives, computed on the training rows only. Not sklearn's PCA.explained_variance_, which is s_i^2 / (n - 1) and would rescale alpha by a factor of n - 1.",
+    "n_train_rows": 800,
+    "models": {
+      "ridge_pca": {
+        "design_shape": [
+          800,
+          200
+        ],
+        "n_nonzero_singular_values": 200,
+        "trace_ZtZ": 11155960.73,
+        "effective_df_sweep": {
+          "1.0": 199.99,
+          "3.16": 199.97,
+          "10.0": 199.91,
+          "31.6": 199.73,
+          "100.0": 199.14,
+          "316.0": 197.3,
+          "1000.0": 191.76,
+          "3162.0": 176.57,
+          "10000.0": 143.28,
+          "31623.0": 94.37,
+          "100000.0": 49.71,
+          "316228.0": 22.15,
+          "1000000.0": 8.81
+        },
+        "selected_alpha": 100000.0,
+        "effective_df_at_selected_alpha": 49.71
+      },
+      "ridge_head": {
+        "design_shape": [
+          800,
+          768
+        ],
+        "n_nonzero_singular_values": 768,
+        "trace_ZtZ": 614400.0,
+        "effective_df_sweep": {
+          "1.0": 611.44,
+          "3.16": 538.45,
+          "10.0": 450.46,
+          "31.6": 351.96,
+          "100.0": 251.77,
+          "316.0": 163.11,
+          "1000.0": 95.87,
+          "3162.0": 51.78,
+          "10000.0": 25.89,
+          "31623.0": 11.87,
+          "100000.0": 4.87,
+          "316228.0": 1.77,
+          "1000000.0": 0.6
+        },
+        "selected_alpha": 3162.0,
+        "effective_df_at_selected_alpha": 51.78
+      }
+    }
+  }
+}

@@ -85,6 +85,8 @@ from baseline import (
     evaluate,
     impute_with_train_mean,
     _select_alpha_inner_cv,
+    save_prediction_bundle,
+    verify_prediction_bundle,
 )
 
 
@@ -108,19 +110,51 @@ MLP_N_ITER_NO_CHANGE = 10
 # The baseline regularises 200 PCA components of expression; the head
 # regularises 768 raw embedding dimensions with no PCA. The same alpha does
 # not mean the same shrinkage on two different spectra, so the head gets its
-# own grid. Effective degrees of freedom, sum lambda_i / (lambda_i + alpha),
-# measured on the standardised embeddings:
+# own grid.
 #
-#     alpha=1     -> 676.2      alpha=3.16e3 ->  64.3
-#     alpha=10    -> 513.0      alpha=1e4    ->  32.7
-#     alpha=1e2   -> 297.0      alpha=1e5    ->   6.5
-#     alpha=1e3   -> 117.1      alpha=1e6    ->   0.8
+# Effective degrees of freedom below are the trace of the ridge hat matrix,
 #
-# Below alpha=1 the fit is effectively unregularised (alpha=0.01 gives 765 df),
-# so the grid does not extend downward. The ceiling is 1e6 because the model
-# is shrunk to under one effective degree of freedom there. The baseline
-# selecting alpha=1e5 on its own spectrum is direct evidence that this task
-# rewards heavy shrinkage, which is why the ceiling is set this high.
+#     df(alpha) = sum_i  s_i^2 / (s_i^2 + alpha)
+#
+# where s_i are the singular values of the centred design matrix Ridge
+# actually receives: the standardised embeddings, on the 800 training rows
+# only. These are computed by analysis.py, not by hand. Regenerate with
+# `py analysis.py --split val` and read A4_effective_degrees_of_freedom in
+# analysis_results.json.
+#
+#     alpha=1     -> 611.44     alpha=3.16e3 ->  51.78
+#     alpha=10    -> 450.46     alpha=1e4    ->  25.89
+#     alpha=1e2   -> 251.77     alpha=1e5    ->   4.87
+#     alpha=1e3   ->  95.87     alpha=1e6    ->   0.60
+#
+# trace(Z'Z) = 614400.0, which is exactly 800 rows x 768 unit-variance
+# columns. That identity is the cheapest available check that a df figure was
+# measured on the right matrix: at large alpha the sum converges to
+# trace/alpha, so alpha=1e6 cannot exceed 0.614 on this design.
+#
+# A hand-computed table previously in this file reported 676.2 / 513.0 /
+# 297.0 / 117.1 / 64.3 / 32.7 / 6.5 / 0.8 across the same grid. Every entry
+# was high: by 11% at alpha=1, rising to 33% at alpha=1e6. Its large-alpha
+# limit implies trace(Z'Z) of roughly 819,000 rather than 614,400, so it was
+# measured on some other matrix -- more rows than the 800 the model was
+# fitted on, or an unstandardised design, or both. Which of those is not
+# recoverable. That it was not the fitted design is certain. The 64.2 / 64.3
+# figure quoted throughout the project documents comes from that table and is
+# superseded by 51.78.
+#
+# The grid does not extend below alpha=1 because 611 of 768 dimensions are
+# already live there. The ceiling is 1e6 because the model is shrunk to 0.60
+# effective degrees of freedom, below a single parameter, so nothing above it
+# can be optimal.
+#
+# Where the two models land is the reason for measuring this at all. Inner CV
+# chose alpha=1e5 for the baseline and alpha=3162 for the head -- a factor of
+# 32 apart, on feature spaces of 200 and 768 dimensions -- and the two arrive
+# at 49.71 and 51.78 effective parameters, within 4% of each other. Nothing
+# was tuned to produce that. It means the capacity available to the two
+# models was matched by measurement rather than assumed, and it suggests that
+# roughly 50 effective parameters is what 800 training lines support on this
+# task, largely independent of the representation.
 
 HEAD_RIDGE_ALPHAS = [
     1.0, 3.16, 10.0, 31.6, 100.0, 316.0,
@@ -437,8 +471,16 @@ def run_task(
     hidden: int,
     run_mlp: bool,
     baseline_ref: dict | None,
+    predictions_out: dict | None = None,
 ) -> dict | None:
-    """Run the head ladder for one prediction task and compare to baseline."""
+    """
+    Run the head ladder for one prediction task and compare to baseline.
+
+    If `predictions_out` is a dict it is filled in place with each head's
+    held-out predictions and the matching truth matrix, in the same shape
+    baseline.run_task produces, so baseline.save_prediction_bundle can write
+    both. Passing None -- the default -- leaves behaviour unchanged.
+    """
     prepared = prepare_task(
         task, embeddings, crispr, prism, selective_genes, assignment, eval_split
     )
@@ -504,6 +546,18 @@ def run_task(
         "models": {},
     }
 
+    # Truth matrix and labels recorded once; each head appends its own array.
+    # Y_eval_raw is stored unfilled, NaNs intact, because per_target_spearman
+    # masks non-finite entries per column and imputing them here would silently
+    # change the metric for anything computed downstream.
+    if predictions_out is not None:
+        predictions_out[task] = {
+            "eval_index": [str(i) for i in eval_index],
+            "target_columns": [str(c) for c in Y.columns],
+            "y_true": Y_eval_raw,
+            "models": {},
+        }
+
     # ---- ridge head (linear control on embeddings) ---------------------
     print("\n  [1/2] ridge head (linear control on embeddings)")
     preds, info = run_ridge_head(
@@ -512,6 +566,8 @@ def run_task(
         train_groups=train_groups,
     )
     metrics = evaluate(Y_eval_raw, preds)
+    if predictions_out is not None:
+        predictions_out[task]["models"]["ridge_head"] = preds
     results["models"]["ridge_head"] = {
         "description": "StandardScaler -> Ridge on Geneformer embeddings.",
         **info, **metrics,
@@ -533,6 +589,8 @@ def run_task(
             train_groups=train_groups,
         )
         metrics = evaluate(Y_eval_raw, preds)
+        if predictions_out is not None:
+            predictions_out[task]["models"]["mlp_head"] = preds
         results["models"]["mlp_head"] = {
             "description": "StandardScaler -> MLPRegressor on Geneformer embeddings.",
             **info, **metrics,
@@ -608,6 +666,16 @@ def main() -> int:
         "--processed-dir", default=str(config.PROCESSED_DIR),
         help="Directory holding the processed artifacts and embeddings.",
     )
+    parser.add_argument(
+        "--save-predictions", action="store_true",
+        help=(
+            "Also write each head's held-out prediction matrix and the "
+            "matching truth matrix to <processed-dir>/predictions/, then "
+            "re-score them from disk to prove the files match what was "
+            "reported. Off by default, so the plain command remains the one "
+            "that produced the published head_results.json."
+        ),
+    )
     args = parser.parse_args()
 
     from pathlib import Path
@@ -679,11 +747,14 @@ def main() -> int:
         "tasks": {},
     }
 
+    predictions_out: dict | None = {} if args.save_predictions else None
+
     for task in ("crispr", "prism"):
         result = run_task(
             task, embeddings, crispr, prism, selective_genes,
             assignment, metadata, args.split, args.mlp_hidden,
             run_mlp=not args.no_mlp, baseline_ref=baseline_ref,
+            predictions_out=predictions_out,
         )
         if result is not None:
             all_results["tasks"][task] = result
@@ -694,6 +765,24 @@ def main() -> int:
         return 1
 
     path = io_utils.save_json(all_results, out / "head_results.json")
+
+    # ---- optional: persist held-out predictions, then prove they round-trip
+    if predictions_out:
+        print(f"\n{'=' * 74}")
+        print("SAVING HELD-OUT PREDICTIONS")
+        print("=" * 74)
+        written = save_prediction_bundle(predictions_out, out, "head", args.split)
+        print(f"\n  {len(written)} file(s) written to {out / 'predictions'}")
+        print("\n  Round-trip check -- re-scoring each matrix from disk:")
+        ok = verify_prediction_bundle(
+            predictions_out, all_results, out, "head", args.split
+        )
+        if ok:
+            print("\n  All saved matrices re-score to the reported values.")
+        else:
+            print("\n  *** MISMATCH: at least one saved matrix does not re-score")
+            print("      to the value reported above. Do not use these files.")
+            return 1
 
     # ------------------------------------------------------------ summary
     print(f"\n{'=' * 74}")
