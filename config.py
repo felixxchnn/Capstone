@@ -280,6 +280,49 @@ FLOAT_DTYPE = "float32"
 OSTEOSARCOMA_LINEAGE = "Bone"
 OSTEOSARCOMA_DISEASE_KEYWORD = "osteosarcoma"
 
+# --------------------------------------------------------------------------
+# Phase 2 -- precision-oncology demo (capstone/scope-decisions.md, 2026-08-25)
+# --------------------------------------------------------------------------
+# Two samples, two roles -- see CLAUDE.md section 9.7. Neither constant changes
+# anything about the Phase 1 pipeline; both are read only by the new demo
+# modules (sample_profile.py, evidence.py, case_study.py, report.py).
+
+# Root for external (non-DepMap) data the demo depends on. Small enough files
+# under here (the GCT, the license-filtered DGIdb snapshot) are committed
+# directly, unlike the gitignored raw DepMap CSVs under RAW_DIR.
+EXTERNAL_DIR = PROJECT_ROOT / "data" / "external"
+SID_OSTEOSARC_DIR = EXTERNAL_DIR / "sid_osteosarc"
+DGIDB_DIR = EXTERNAL_DIR / "dgidb"
+
+# Internal verification anchor: a DepMap osteosarcoma line with real CRISPR
+# ground truth, chosen for osteosarcoma identity and complete artifacts, not
+# for a favourable predicted score (capstone/scope-decisions.md).
+DEMO_VERIFICATION_MODEL_ID = "ACH-000364"  # U-2 OS, val split
+
+# Primary demo sample: Sid Sijbrandij's real primary-tumour RNA-seq
+# (osteosarc.com, CC0 1.0). Bulk tumour tissue, not a cultured cell line --
+# a real domain shift from every DepMap line the model ever saw. No CRISPR
+# ground truth exists for it.
+DEMO_TUMOR_SAMPLE_ID = "BG003082"
+DEMO_TUMOR_GCT_FILE = SID_OSTEOSARC_DIR / "BG003082.gene_tpm.gct.gz"
+
+# Machine-readable status fields attached to every prediction the demo shows.
+# Never inferred at report-render time -- fixed here so the two samples cannot
+# accidentally be tagged the same way.
+PREDICTION_STATUS_HELD_OUT = "held_out_prediction"
+PREDICTION_STATUS_EXPLORATORY = "exploratory_external_prediction"
+OUTCOME_STATUS_MEASURED = "measured_crispr"
+OUTCOME_STATUS_UNAVAILABLE = "unavailable"
+
+# Entrez <-> Ensembl cross-reference. prepare_geneformer_input.py already
+# expects to cache one here (it just never has -- see CLAUDE.md section 7);
+# sample_profile.py's Ensembl-first gene-ID reconciliation reads the same file.
+ENSEMBL_MAP_FILE = PROCESSED_DIR / "ensembl_map.csv"
+
+# Ranking / evidence display thresholds.
+TOP_N_DEPENDENCIES = 25     # genes shown per sample in the ranked-dependency table
+TOP_K_EVIDENCE_PER_GENE = 5  # interaction records shown per gene, per direction tier
+
 
 def osteosarcoma_mask(metadata) -> "pd.Series":  # noqa: F821 (pandas imported lazily)
     """

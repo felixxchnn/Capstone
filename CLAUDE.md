@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 Operating instructions for Claude Code in this repository. Read this before touching
-anything. Last updated 2026-08-24 at commit `9a690d0`.
+anything. Last updated 2026-08-25 at commit `9381c5e`, plus the uncommitted Phase 2 scope
+addition (§9.7, §13) landing in the next commit.
 
 ---
 
@@ -12,7 +13,16 @@ ridge-on-PCA-expression baseline at predicting CRISPR gene dependency across hel
 cancer cell lines, measured by per-target Spearman correlation?**
 
 The answer is no, and the result is now quantified. This is a defensible negative finding
-with identified mechanisms, not a failure. The presentation is early October 2026.
+with identified mechanisms, not a failure. This comparison is **Phase 1** and is the
+project's validated scientific core — none of it is discarded, rewritten, or reopened by
+what follows.
+
+**Phase 2** (approved 2026-08-25, §9.7): the October deliverable also includes an end-to-end
+proof-of-concept — using Phase 1's frozen models to rank predicted dependencies for two real
+samples, then connecting the top predictions to cited drug–gene evidence, shown in an offline
+report. It demonstrates a possible future workflow; it does not predict patient treatment
+response, and says so explicitly everywhere the distinction matters (§13). The presentation
+is early October 2026.
 
 The public repository is itself a deliverable — it supports university applications.
 Reviewers may clone it. Code quality, honesty of documentation, and reproducibility matter
@@ -122,11 +132,6 @@ file is committed: `git restore data/processed/head_results.json`. This has alre
 twice. Prefer running without `--no-mlp` unless you specifically need the shorter run, and
 check `git status` afterwards.
 
-**`run_ridge_pca` has no grid-boundary guard.** `run_ridge_head` sets
-`alpha_at_grid_boundary` and warns; `run_ridge_pca` does not. The function that actually
-suffered the truncated-grid bug is the one without the check. Adding the same guard to
-`run_ridge_pca` is a small, safe improvement worth making before E1 and E2.
-
 **`evaluate()` discards the per-target correlation vectors.** It returns summary statistics
 only. Anything needing the vectors must recompute them via `per_target_spearman`, or read
 the saved prediction matrices.
@@ -184,9 +189,7 @@ attrition zero.
 
 ## 7. Module map
 
-Thirteen modules. I have read four in full: `config.py`, `io_utils.py`, `baseline.py`,
-`train_head.py`. The rest I know only from project documentation — **inspect them before
-relying on any claim about their internals.**
+Thirteen modules today; Phase 2 (§9.7) adds more. Nine have been read in full.
 
 | Module | Role | Read? |
 |---|---|---|
@@ -194,18 +197,25 @@ relying on any claim about their internals.**
 | `io_utils.py` | `save_matrix` / `load_matrix` / `save_table` / `save_json`, parquet-or-npz fallback | yes |
 | `baseline.py` | `prepare_task`, `impute_with_train_mean`, `per_target_spearman`, `evaluate`, `run_global_mean`, `run_lineage_mean`, `run_ridge_pca`, `_select_alpha_inner_cv`, `save_prediction_bundle`, `verify_prediction_bundle` | yes |
 | `train_head.py` | `load_embeddings`, `prepare_task`, `run_ridge_head`, `run_mlp_head`, `HEAD_RIDGE_ALPHAS` | yes |
-| `analysis.py` | A1–A4: bootstrap CI, Wilcoxon, per-target correlation, effective df | yes (authored) |
-| `gene_ids.py` | Entrez/Ensembl handling | no |
-| `build_dataset.py` | Joins DepMap CSVs into the processed matrices | no |
+| `analysis.py` | A1–A4: bootstrap CI, Wilcoxon, per-target correlation, effective df; `--fast` vectorised path | yes (authored) |
+| `gene_ids.py` | `parse_gene_label`, `intersect_gene_spaces`, `canonical_labels`, `map_external_matrix` — Entrez is the join key throughout; no Ensembl handling here (see `prepare_geneformer_input.py`). `map_external_matrix`'s `fill_value` defaults to `0.0`, not NaN — callers reindexing a truly external sample must override it or "missing" and "measured zero" silently collide. Its symbol-matching pass uses `lookup.setdefault`, so duplicate external symbols silently keep whichever is seen first. | yes |
+| `build_dataset.py` | Joins DepMap CSVs into the processed matrices; `expression.npz` is `log2(TPM+1)`, confirmed both from this module's docstring and from the committed values (max 15.37) | yes (expression/CRISPR/metadata/PRISM loaders and the osteosarcoma section) |
+| `prepare_geneformer_input.py` | Reconstructs pseudo-counts from log-TPM (`TPM = 2**log_tpm - 1`) since Geneformer wants raw counts and DepMap ships log-TPM; maps canonical `SYMBOL (ENTREZ)` to Ensembl via `ensembl_map.csv` (columns `entrez,ensembl_id`), built once via `mygene` (Kaggle-only) and cached. **That cache file does not exist anywhere in this repository** — confirmed via `git log --all` and a filesystem search — so the 18,460/18,460 zero-attrition Ensembl mapping was produced and consumed entirely on Kaggle and never carried back here. Regenerating it locally needs either `mygene` (absent) or a substitute static Entrez↔Ensembl reference. | yes |
 | `splits.py` | Patient-grouped, lineage-stratified split generation | no |
-| `checks.py` | Integrity assertions; fails the run on group straddling | no |
-| `make_fixture.py` | Small test data generation | no |
-| `prepare_geneformer_input.py` | Tokeniser input prep; ran on Kaggle | no |
+| `checks.py` | Integrity assertions; fails the run on group straddling; 8 sections including PRISM and osteosarcoma coverage | yes |
+| `make_fixture.py` | Synthetic fixture generation mirroring real DepMap file structure, including a synthetic Bone/Osteosarcoma subset and a synthetic PRISM matrix | yes |
 | `run_geneformer_embeddings.py` | Embedding extraction; ran on Kaggle | no |
-| `inspect_data.py` | Ad-hoc inspection. Hard-codes filenames, violating `config.py`'s convention. Unrunnable from a clone since raw CSVs are gitignored. Ship-or-cut undecided. | no |
+| `inspect_data.py` | Ad-hoc inspection, three hard-coded raw filenames read via bare `pd.read_csv`, not `config.resolve_file`/`RAW_DIR`. Unrunnable from a clone (raw CSVs gitignored) even before that. Ship-or-cut undecided. | yes |
 
 **`data/processed`** holds 15 tracked files. `data/processed/predictions/` is gitignored —
 12 files, ~12 MB, regenerable in ~3 minutes from `--save-predictions` on both modules.
+**PRISM (`prism_response`) is fully wired end to end in code — `config.py`'s three
+`prism_*` aliases, `build_dataset.load_prism`, both `run_task` functions' `task="prism"`
+branch, `checks.py` §7, `analysis.py --task prism` — but no raw PRISM file has ever been
+downloaded; `join_report.json` records `"prism": {"file": None, "status": "absent"}`.** This
+is a different thing from the Phase 2 drug-evidence layer in §9.7: PRISM is drug-response
+*prediction* (a second ML target), the Phase 2 layer is gene–drug evidence *retrieval*, no
+model attached.
 
 ---
 
@@ -229,9 +239,15 @@ relying on any claim about their internals.**
 ### 9.1 Documentation pass — currently the bottleneck
 
 `capstone/handoff-review-2026-08-20.md`, `capstone/status-report-2026-08-20.md`,
-`capstone/RESUME-HERE.md`, `capstone/geneformer-provenance-findings.md`, and
-`capstone/data-integrity-hashes.md` all contain superseded figures. Slides drafted from them
-would inherit the errors. Corrections needed:
+`capstone/RESUME-HERE.md`, and `capstone/geneformer-provenance-findings.md` were referenced
+here as if they existed and needed correcting. **They do not exist and never have** —
+confirmed by a full `git log --all --diff-filter=A` search of this repository's entire
+history. Only `capstone/CONTEXT-2026-08-24.md`, `capstone/RESUME-HERE-2026-08-23.md`, and the
+Kaggle notebook snapshot have ever been committed. Treat any future reference to a capstone
+doc not in that list as suspect until confirmed with `git log --all -- <path>`.
+`capstone/data-integrity-hashes.md` is in the same position — referenced below as if it
+already held a hash table; it does not exist yet and needs to be created, not corrected.
+Corrections needed in the two docs that do exist:
 
 | Stale claim | Correct value |
 |---|---|
@@ -247,25 +263,22 @@ would inherit the errors. Corrections needed:
 | Repo at `eef71e8` | `9a690d0` |
 | 11 or 12 modules | 13 |
 
-Also: `data-integrity-hashes.md` needs `analysis_results.json` added as the 15th file with
-its hash, and the determinism claim pinned to commit `9a690d0`.
+Also: `data-integrity-hashes.md` needs to be created (it does not exist — see above), with
+SHA-256 for the original 14 files plus `analysis_results.json` as the 15th, determinism
+pinned to a specific commit.
 
 The README rewrite is larger: it still describes the project as "Week 1–2," lists 8 of 13
 modules, and predates `train_head.py`, `analysis.py` and the entire Geneformer arm.
 
-### 9.2 Vectorised bootstrap — do before E1
+### 9.2 Vectorised bootstrap — already complete
 
-`analysis.py`'s bootstrap loops over 4,297 targets calling `spearmanr` on 170 values each:
-~12.9 million calls per 1,000-resample run, single-threaded, **30–45 minutes**. E1, E2 and
-the test run mean another 2–3 hours of waiting.
-
-Available speedup: ridge predictions contain no NaNs, so per-column missingness is determined
-entirely by `y_true` and is **fixed across resamples**. Fully-observed target columns can be
-ranked with `rankdata(axis=0)` and correlated as one vectorised block; partially-missing
-columns fall back to the loop. Realistically 8–15× faster.
-
-**Requirement:** must assert exact agreement with `per_target_spearman` on the unresampled
-data before running. See invariant 3.
+`analysis.py --fast` (commit `47fd91b`) does this: fully-observed target columns are ranked
+with `rankdata(axis=0)` and correlated as one vectorised block; partially-missing columns
+fall back to the original per-column loop, which is unchanged and still the default.
+Verified against `baseline.per_target_spearman` (invariant 3) both on the unresampled data
+and on one seeded resample with ties before being trusted; `--fast --bootstrap 1000`
+reproduces the committed `analysis_results.json` byte-for-byte. Measured ~10.6× faster
+(259.8s → 24.5s at 50 resamples). **Do not re-run this as new work.**
 
 ### 9.3 E1 — random projection control
 
@@ -318,8 +331,36 @@ wider grid would let the slide say "we checked" rather than "we think." ~20 minu
 
 Freeze the model set in writing, dated. Then F1 (test split, once, all models together),
 F2 (osteosarcoma — `analysis.py`'s saved-prediction machinery gives this nearly free by
-resampling osteosarcoma rows instead of all 170; expect ~4 lines in val, state n explicitly),
-F3 (narrative and slides — the actual deliverable, draft complete two weeks before).
+resampling osteosarcoma rows instead of all 170; **5**, not ~4, val-split osteosarcoma lines,
+state n explicitly), F3 (narrative and slides — the actual deliverable, draft complete two
+weeks before).
+
+### 9.7 Phase 2 — precision-oncology proof-of-concept demo
+
+**Approved scope change, 2026-08-25** (recorded in `capstone/scope-decisions.md`): the
+October deliverable is not just the Phase 1 comparison above. It adds an end-to-end demo —
+dependency ranking plus a drug–gene evidence layer plus an offline UI — built on two samples,
+each playing a different, explicitly labeled role:
+
+- **ACH-000364 (U-2 OS, val split)** — internal verification anchor. Selected for
+  osteosarcoma identity and complete artifacts (expression, CRISPR ground truth, embedding,
+  all four saved val-split predictions), **not** for a favorable score. Shown alongside the
+  aggregate result across all 5 val-split osteosarcoma lines so it doesn't read as
+  cherry-picked. `prediction_status = held_out_prediction`, `outcome_status =
+  measured_crispr`.
+- **BG003082** — Sid Sijbrandij's real primary-tumor RNA-seq (`osteosarc.com`, CC0 1.0,
+  resected 2022-12-16). Primary demo sample, exploratory only:
+  `prediction_status = exploratory_external_prediction`, `outcome_status = unavailable` (no
+  CRISPR screen exists for this tissue). Bulk tumor tissue is a real domain shift from the
+  cultured cell lines the model was trained/validated on — every prediction on it carries
+  that caveat, never phrased as measured performance.
+
+This does not touch any Phase 1 invariant, split, or committed result. `E1`/`E3`/model-set
+freeze/F1 (§9.3–9.6) proceed independently; `D1`-numbered items below are additive.
+`E2` (§9.4) is deprioritized past October given the added workload — see the full plan for
+the complete design (gene-ID reconciliation order, the missing `ensembl_map.csv`, log-scale
+handling, the DGIdb evidence schema, the interactive static-HTML report):
+`C:\Users\Leo He\.claude\plans\moonlit-dazzling-dream.md`.
 
 ---
 
@@ -327,9 +368,11 @@ F3 (narrative and slides — the actual deliverable, draft complete two weeks be
 
 - Do not run anything on the test split.
 - Do not install `pyarrow`.
-- Do not add scope. Fine-tuning, alternative pooling, and a CPIC/PharmGKB pharmacogenomic
-  safety layer are all cut. Six weeks does not accommodate them alongside a proper test run
-  and a rehearsed presentation.
+- Do not add scope beyond what's recorded in `capstone/scope-decisions.md`. Fine-tuning,
+  alternative pooling, and a CPIC/PharmGKB pharmacogenomic *safety* layer (germline adverse-
+  reaction prediction) are all still cut — the Phase 2 drug–gene evidence-retrieval layer in
+  §9.7 is a different, narrower thing (cited interaction evidence, no model, no safety
+  claims) and its approval does not reopen either of those.
 - Do not "fix" the `train_groups` fillna no-op.
 - Do not edit copies under `OneDrive\`.
 - Do not rename the Windows profile folder.
@@ -367,3 +410,35 @@ block goes in** — PowerShell, VS Code editor, browser — before the block, an
 when something is text to paste into a file rather than a command to run. Write code in full
 with no placeholders. Give critical, objective feedback; do not agree by default. Preserve
 everything in existing files except what is being changed.
+
+## 13. Scope governance — mandatory
+
+The approved research question is authoritative. Do not silently redefine it to match an available dataset, model, or implementation.
+
+A proposed change is material if it alters any of the following:
+
+- population or unit of analysis;
+- input data;
+- prediction target or label;
+- evaluation metric;
+- intended user or use case;
+- scientific claim;
+- distinction between experimental, patient-level, and clinical evidence.
+
+Before making a material change:
+
+1. State the current approved scope.
+2. Describe the proposed change precisely.
+3. Explain why it is necessary.
+4. Identify which original claims would no longer be supported.
+5. Present alternatives, including retaining the original scope.
+6. Obtain Felix’s explicit approval.
+7. Record the decision and date before implementation.
+
+Never treat a shared motivation as proof that two research questions have the same scope. In particular, cancer-cell-line gene-dependency prediction is not equivalent to patient treatment-response prediction or personalized treatment recommendation.
+
+At every major milestone, perform and record a scope-drift check:
+
+> Does the current dataset, prediction target, evaluation, and deliverable still answer the explicitly approved research question?
+
+If the answer is no or uncertain, stop implementation and ask Felix before proceeding.
