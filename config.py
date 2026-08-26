@@ -71,6 +71,19 @@ FILE_ALIASES: dict[str, tuple[list[str], str]] = {
         ],
         "CRISPRGeneEffect*.csv",
     ),
+    # Optional: DepMap's gene-level expected-counts file. Referenced by
+    # prepare_geneformer_input.py, which needs raw counts, not log-TPM.
+    # Deliberately empty: capstone/RESUME-HERE-2026-08-23.md records that the
+    # only candidate filenames anyone has ever written down for this file
+    # ("OmicsExpressionGenesExpectedCountProfile.csv",
+    # "OmicsExpressionGenesExpectedCount.csv") were "guessed at the time and
+    # have never been checked against a real DepMap release." Registering
+    # unverified names here risks a silent wrong-file match; an empty entry
+    # cannot match anything, so resolve_file(required=False) always returns
+    # None and prepare_geneformer_input.py falls through to the documented,
+    # already-used reconstructed-from-log-TPM path. Fill this in only once a
+    # real filename has been confirmed against an actual downloaded file.
+    "expression_counts": ([], ""),
     "model": (
         [
             "Model.csv",
@@ -110,7 +123,16 @@ class MissingDataFile(FileNotFoundError):
     """Raised when a required raw file cannot be located."""
 
 
-def resolve_file(logical_name: str, required: bool = True) -> Path | None:
+class AmbiguousDataFile(Exception):
+    """Raised when a glob fallback matches more than one file and the caller
+    has asked not to guess (see `resolve_file`'s `reject_ambiguous_glob`)."""
+
+
+def resolve_file(
+    logical_name: str,
+    required: bool = True,
+    reject_ambiguous_glob: bool = False,
+) -> Path | None:
     """
     Locate a raw data file by logical name.
 
@@ -121,6 +143,12 @@ def resolve_file(logical_name: str, required: bool = True) -> Path | None:
     required
         If True, raise MissingDataFile when nothing matches. If False,
         return None instead (used for the optional PRISM files).
+    reject_ambiguous_glob
+        If True, raise AmbiguousDataFile when the glob fallback matches more
+        than one file, instead of silently taking the first (sorted) match.
+        Default False preserves existing behaviour for every alias already
+        relied on by build_dataset.py; opt in per call site for a newly
+        added, less-trusted alias (e.g. one with unverified filenames).
 
     Returns
     -------
@@ -139,7 +167,21 @@ def resolve_file(logical_name: str, required: bool = True) -> Path | None:
         if candidate.is_file():
             return candidate
 
-    matches = sorted(glob.glob(str(RAW_DIR / pattern)))
+    # An empty pattern means "no glob fallback configured" -- glob.glob on a
+    # bare directory path matches the directory itself, so this must be
+    # skipped rather than passed through.
+    matches = sorted(glob.glob(str(RAW_DIR / pattern))) if pattern else []
+
+    if reject_ambiguous_glob and len(matches) > 1:
+        raise AmbiguousDataFile(
+            f"\nMultiple files match the {logical_name!r} glob pattern "
+            f"{pattern!r} and none of the known exact names "
+            f"{known_names} matched, so the choice would be a guess:\n"
+            + "\n".join(f"    - {Path(m).name}" for m in matches)
+            + f"\n\nRename the correct file to one of the known names, or "
+              f"narrow FILE_ALIASES[{logical_name!r}] in config.py.\n"
+        )
+
     if matches:
         return Path(matches[0])
 

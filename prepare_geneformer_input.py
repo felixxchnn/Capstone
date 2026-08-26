@@ -59,6 +59,75 @@ import gene_ids
 # Count handling
 # --------------------------------------------------------------------------
 
+def _load_depmap_wide_csv(path: Path) -> pd.DataFrame:
+    """
+    Read a DepMap wide CSV (ModelID, sequencing metadata, then one column per
+    gene), defusing the same two traps build_dataset.load_expression defuses
+    for the TPM file: an unindexed leading metadata block that `index_col=0`
+    would silently misread as the row index, and multiple sequencing profiles
+    per cell line that make ModelID non-unique before filtering. Both would
+    otherwise fail silently -- no exception, just a wrong or empty index.
+
+    Returns a frame indexed by ModelID, with metadata columns stripped.
+    """
+    raw = pd.read_csv(path, low_memory=False)
+    unnamed = [c for c in raw.columns if str(c).startswith("Unnamed:")]
+    if unnamed:
+        raw = raw.drop(columns=unnamed)
+
+    if config.MODEL_ID not in raw.columns:
+        raise KeyError(
+            f"{path.name} has no {config.MODEL_ID!r} column. First 10 "
+            f"columns are: {list(raw.columns[:10])}. This file may not be "
+            f"laid out like the TPM file -- check before trusting it."
+        )
+
+    flag = config.EXPRESSION_DEFAULT_FLAG
+    if flag in raw.columns:
+        is_default = raw[flag].astype(str).str.strip().str.lower().isin(
+            {"true", "1", "1.0", "yes", "t"}
+        )
+        raw = raw.loc[is_default].copy()
+
+    raw = raw.set_index(config.MODEL_ID)
+    if not raw.index.is_unique:
+        raise ValueError(
+            f"{path.name} has duplicate {config.MODEL_ID} values even after "
+            f"the {flag} filter -- refusing to proceed silently."
+        )
+
+    meta_cols = [c for c in config.EXPRESSION_META_COLS if c in raw.columns]
+    return raw.drop(columns=meta_cols)
+
+
+def _align_counts_to_expression(
+    raw_full: pd.DataFrame, expression_index: pd.Index
+) -> pd.DataFrame:
+    """
+    Align a loaded counts frame to the exact ModelIDs already in the
+    processed expression matrix.
+
+    Raises if any expected ModelID is absent from the counts file. A missing
+    observation is not a biological zero count, so it must never be
+    zero-filled, silently dropped, or backfilled from reconstructed
+    pseudocounts for only that row -- any of those would mix two different
+    measurement sources within one matrix without saying so.
+    """
+    lines_missing = expression_index.difference(raw_full.index)
+    if len(lines_missing):
+        preview = list(lines_missing[:10])
+        raise ValueError(
+            f"The counts file is missing {len(lines_missing)} of "
+            f"{len(expression_index)} ModelIDs present in the processed "
+            f"expression matrix. First {len(preview)}: {preview}. Refusing "
+            f"to zero-fill or backfill reconstructed pseudocounts for only "
+            f"some cell lines -- either supply a counts file that covers "
+            f"every cell line, or remove it so the pipeline uses "
+            f"reconstructed pseudocounts for all of them."
+        )
+    return raw_full.reindex(index=expression_index)
+
+
 def logtpm_to_pseudocounts(log_tpm: pd.DataFrame) -> pd.DataFrame:
     """
     Reconstruct an approximate count-like matrix from log2(TPM+1).
@@ -90,16 +159,19 @@ def load_expression_counts() -> tuple[pd.DataFrame, dict]:
     processed_expr = io_utils.load_matrix(config.PROCESSED_DIR / "expression")
     canonical_cols = list(processed_expr.columns)
 
-    counts_path = config.resolve_file("expression_counts", required=False)
+    counts_path = config.resolve_file(
+        "expression_counts", required=False, reject_ambiguous_glob=True
+    )
     if counts_path is not None:
         print(f"Using real expected-counts file: {counts_path.name}")
-        raw = pd.read_csv(counts_path, index_col=0, low_memory=False)
+        raw_full = _load_depmap_wide_csv(counts_path)
 
-        # The counts file uses the same SYMBOL (ENTREZ) columns and ModelID
-        # index as the TPM file. Reindex it into the canonical gene space and
-        # to the exact cell lines already in the processed dataset.
-        raw = raw.loc[raw.index.intersection(processed_expr.index)]
-        raw = raw.reindex(index=processed_expr.index)
+        # The counts file uses the same SYMBOL (ENTREZ) columns as the TPM
+        # file, now correctly indexed by ModelID. This raises if any ModelID
+        # the processed dataset expects is absent from the counts file --
+        # see _align_counts_to_expression for why that must not be patched
+        # over silently.
+        raw = _align_counts_to_expression(raw_full, processed_expr.index)
 
         available = [c for c in canonical_cols if c in raw.columns]
         missing = [c for c in canonical_cols if c not in raw.columns]
@@ -107,6 +179,16 @@ def load_expression_counts() -> tuple[pd.DataFrame, dict]:
             0.0, index=processed_expr.index, columns=canonical_cols
         )
         counts[available] = raw[available].to_numpy(dtype=np.float64)
+
+        if counts.isna().any().any():
+            n_nan = int(counts.isna().to_numpy().sum())
+            raise ValueError(
+                f"{counts_path.name} produced {n_nan} unexpected NaN "
+                f"value(s) in the aligned count matrix even though every "
+                f"expected ModelID is present -- likely per-gene missing "
+                f"values in the source file. Refusing to silently "
+                f"zero-fill; inspect the file before proceeding."
+            )
         counts = counts.clip(lower=0.0)
 
         report = {
@@ -421,6 +503,88 @@ def _self_test() -> int:
     assert list(X2.columns) == ["ENSG001", "ENSG003"], \
         f"collision not handled: {list(X2.columns)}"
     print("  [ok] Ensembl collision handling")
+
+    # 4. the real-counts loader defuses the same two traps as
+    # build_dataset.load_expression: an unindexed metadata block ahead of the
+    # gene columns, and multiple sequencing profiles per ModelID.
+    import tempfile
+    import os as _os
+
+    fd, tmp_name = tempfile.mkstemp(suffix=".csv")
+    tmp_path = Path(tmp_name)
+    try:
+        with _os.fdopen(fd, "w", newline="") as fh:
+            fh.write(
+                ",SequencingID,ModelID,IsDefaultEntryForModel,AAA (1),BBB (2)\n"
+                "0,seq1,ACH-000000,True,10,20\n"
+                "1,seq2,ACH-000000,False,999,999\n"
+                "2,seq3,ACH-000001,True,30,40\n"
+            )
+        loaded = _load_depmap_wide_csv(tmp_path)
+        assert list(loaded.index) == ["ACH-000000", "ACH-000001"], \
+            f"ModelID index not recovered: {list(loaded.index)}"
+        assert loaded.loc["ACH-000000", "AAA (1)"] == 10, \
+            "the non-default duplicate profile should have been dropped"
+        assert "SequencingID" not in loaded.columns, \
+            "metadata columns should have been stripped"
+        assert "Unnamed: 0" not in loaded.columns, \
+            "the unindexed leading column should have been dropped"
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    print("  [ok] real-counts loader defuses the ModelID-index and "
+          "duplicate-profile traps")
+
+    # 5. duplicate ModelIDs that survive the default-entry filter must raise,
+    # not silently pick one profile.
+    fd, tmp_name = tempfile.mkstemp(suffix=".csv")
+    tmp_path = Path(tmp_name)
+    try:
+        with _os.fdopen(fd, "w", newline="") as fh:
+            fh.write(
+                ",SequencingID,ModelID,IsDefaultEntryForModel,AAA (1)\n"
+                "0,seq1,ACH-000000,True,10\n"
+                "1,seq2,ACH-000000,True,20\n"
+            )
+        try:
+            _load_depmap_wide_csv(tmp_path)
+            raise AssertionError(
+                "duplicate ModelIDs surviving the default-entry filter "
+                "should have raised"
+            )
+        except ValueError:
+            pass
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    print("  [ok] duplicate ModelIDs surviving the default-entry filter "
+          "raise, not silently pick one")
+
+    # 6. a ModelID missing from the counts file must raise, not become a
+    # zero-filled row.
+    expression_index = pd.Index(
+        ["ACH-000000", "ACH-000001", "ACH-000002"], name=config.MODEL_ID
+    )
+    raw_full = pd.DataFrame(
+        {"AAA (1)": [10.0, 20.0]},
+        index=pd.Index(["ACH-000000", "ACH-000001"], name=config.MODEL_ID),
+    )
+    try:
+        _align_counts_to_expression(raw_full, expression_index)
+        raise AssertionError(
+            "a counts file missing an expected ModelID should have raised"
+        )
+    except ValueError as exc:
+        assert "ACH-000002" in str(exc), \
+            f"error should name the missing ModelID: {exc}"
+        assert "1" in str(exc), "error should state the count missing"
+
+    # and the non-missing case still aligns correctly
+    aligned = _align_counts_to_expression(
+        raw_full, pd.Index(["ACH-000001", "ACH-000000"], name=config.MODEL_ID)
+    )
+    assert list(aligned.index) == ["ACH-000001", "ACH-000000"]
+    assert aligned.loc["ACH-000000", "AAA (1)"] == 10.0
+    print("  [ok] a ModelID missing from the counts file raises rather than "
+          "zero-filling")
 
     print("\nSelf-test passed.")
     return 0
