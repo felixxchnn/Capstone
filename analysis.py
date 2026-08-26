@@ -111,6 +111,7 @@ is no longer needed.
 from __future__ import annotations
 
 import sys
+import time
 import argparse
 from pathlib import Path
 
@@ -382,6 +383,257 @@ def bootstrap_over_cell_lines(
     return draws
 
 
+def _colwise_pearson(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """
+    Pearson correlation between corresponding columns of two (n, k) arrays.
+
+    Applied to ranks, this is exactly what scipy.stats.spearmanr computes for
+    an untied-enough column: the rank correlation. A constant column (all
+    values tied, hence all ranks tied) gives a zero-variance column and a 0/0
+    division, which numpy turns into NaN -- the same "undefined, not zero"
+    convention baseline.per_target_spearman uses for constant input.
+    """
+    a = a - a.mean(axis=0, keepdims=True)
+    b = b - b.mean(axis=0, keepdims=True)
+    num = np.sum(a * b, axis=0)
+    denom = np.sqrt(np.sum(a * a, axis=0) * np.sum(b * b, axis=0))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return num / denom
+
+
+def fast_per_target_spearman(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    min_samples: int = 5,
+    fully_observed_mask: np.ndarray | None = None,
+) -> np.ndarray:
+    """
+    Vectorised Spearman per target column, section 9.2 of CLAUDE.md.
+
+    Columns with no missing values in either y_true or y_pred are ranked and
+    correlated as one block with scipy.stats.rankdata(axis=0) and a vectorised
+    Pearson correlation of the ranks -- no per-column Python loop. Columns with
+    any NaN fall back to baseline.per_target_spearman, unchanged, so this
+    function's output is defined to match it column for column.
+
+    fully_observed_mask lets a caller who resamples rows (the bootstrap) supply
+    a mask computed once from the unresampled data, since resampling with
+    replacement never introduces a NaN into a column that had none, or removes
+    one from a column that did -- missingness is a property of which rows
+    exist, not of which are drawn.
+
+    This function is never used for anything until
+    verify_fast_bootstrap_matches has confirmed it reproduces
+    baseline.per_target_spearman exactly, on the unresampled data, for every
+    model it will be run on. That check, not this docstring, is the guarantee.
+    """
+    n_targets = y_true.shape[1]
+    n_rows = y_true.shape[0]
+
+    if fully_observed_mask is None:
+        fully_observed_mask = (
+            np.all(np.isfinite(y_true), axis=0) & np.all(np.isfinite(y_pred), axis=0)
+        )
+    if n_rows < min_samples:
+        fully_observed_mask = np.zeros(n_targets, dtype=bool)
+
+    rho = np.full(n_targets, np.nan, dtype=float)
+
+    if fully_observed_mask.any():
+        t_ranks = stats.rankdata(y_true[:, fully_observed_mask], axis=0)
+        p_ranks = stats.rankdata(y_pred[:, fully_observed_mask], axis=0)
+        rho[fully_observed_mask] = _colwise_pearson(t_ranks, p_ranks)
+
+    remainder = ~fully_observed_mask
+    if remainder.any():
+        rho[remainder] = baseline.per_target_spearman(
+            y_true[:, remainder], y_pred[:, remainder], min_samples=min_samples
+        )
+
+    return rho
+
+
+def self_test_fast_fallback_branch(seed: int = 0, tol: float = 1e-9) -> None:
+    """
+    Exercise fast_per_target_spearman's fallback branch on synthetic data.
+
+    Whether the fallback (the per-column baseline.per_target_spearman path for
+    columns with a NaN in y_true or y_pred) ever runs on real data depends on
+    whether the truth matrix happens to have a missing value in some target
+    column -- not guaranteed, and not something this module controls. This
+    builds a small matrix with NaNs planted in some columns and none in
+    others, so both the vectorised block and the fallback loop run in the same
+    call, and asserts fast_per_target_spearman reproduces
+    baseline.per_target_spearman exactly on it. Independent of whatever main()
+    finds when it checks the real val truth matrix.
+    """
+    rng = np.random.default_rng(seed)
+    n_rows, n_targets = 40, 6
+    y_true = rng.normal(size=(n_rows, n_targets))
+    y_pred = rng.normal(size=(n_rows, n_targets))
+
+    # Columns 1 and 3 get a NaN in y_true; column 4 gets one in y_pred.
+    # Columns 0, 2, 5 stay fully observed, so the vectorised block also runs.
+    y_true[0:3, 1] = np.nan
+    y_true[5, 3] = np.nan
+    y_pred[2, 4] = np.nan
+
+    fully_observed = (
+        np.all(np.isfinite(y_true), axis=0) & np.all(np.isfinite(y_pred), axis=0)
+    )
+    if fully_observed.all() or not fully_observed.any():
+        raise AssertionError(
+            "self_test_fast_fallback_branch's synthetic data does not mix "
+            "fully-observed and partially-missing columns; it would not "
+            "exercise both branches. Fix the test."
+        )
+
+    rho_reference = baseline.per_target_spearman(y_true, y_pred)
+    rho_fast = fast_per_target_spearman(y_true, y_pred)
+
+    nan_reference = np.isnan(rho_reference)
+    nan_fast = np.isnan(rho_fast)
+    if not np.array_equal(nan_reference, nan_fast):
+        raise AssertionError(
+            "self_test_fast_fallback_branch: fast_per_target_spearman's "
+            "fallback branch disagrees with baseline.per_target_spearman on "
+            "which targets are defined."
+        )
+    finite = ~nan_reference
+    if finite.any() and not np.allclose(
+        rho_reference[finite], rho_fast[finite], atol=tol, rtol=0.0
+    ):
+        max_diff = float(np.max(np.abs(rho_reference[finite] - rho_fast[finite])))
+        raise AssertionError(
+            f"self_test_fast_fallback_branch: fast_per_target_spearman's "
+            f"fallback branch diverges from baseline.per_target_spearman by "
+            f"up to {max_diff:.3e}."
+        )
+
+
+def _assert_fast_matches_reference(
+    y_true: np.ndarray,
+    predictions: dict,
+    case_label: str,
+    tol: float,
+) -> None:
+    """One case (unresampled, or one resample) of the --fast gate."""
+    for name, pred in predictions.items():
+        rho_reference = baseline.per_target_spearman(y_true, pred)
+        rho_fast = fast_per_target_spearman(y_true, pred)
+
+        nan_reference = np.isnan(rho_reference)
+        nan_fast = np.isnan(rho_fast)
+        if not np.array_equal(nan_reference, nan_fast):
+            mismatched = int(np.sum(nan_reference != nan_fast))
+            raise AssertionError(
+                f"--fast bootstrap verification failed on {case_label} data "
+                f"for model {name!r}: the vectorised path and "
+                f"baseline.per_target_spearman disagree on which of "
+                f"{rho_reference.size} targets are defined ({mismatched} "
+                f"targets differ). Refusing to run the fast path."
+            )
+
+        finite = ~nan_reference
+        if finite.any() and not np.allclose(
+            rho_reference[finite], rho_fast[finite], atol=tol, rtol=0.0
+        ):
+            max_diff = float(np.max(np.abs(rho_reference[finite] - rho_fast[finite])))
+            raise AssertionError(
+                f"--fast bootstrap verification failed on {case_label} data "
+                f"for model {name!r}: vectorised Spearman diverges from "
+                f"baseline.per_target_spearman by up to {max_diff:.3e} "
+                f"(tolerance {tol:.1e}). Refusing to run the fast path."
+            )
+
+
+def verify_fast_bootstrap_matches(
+    y_true: np.ndarray,
+    predictions: dict,
+    seed: int,
+    tol: float = 1e-9,
+) -> None:
+    """
+    Hard gate on the --fast path (CLAUDE.md invariant 3).
+
+    Checks two cases, for every model about to be bootstrapped:
+
+    1. The unresampled data -- no duplicate rows, so no ties.
+    2. One resample drawn from np.random.default_rng(seed) then
+       rng.integers(0, n_lines, size=n_lines) -- exactly the first draw
+       bootstrap_over_cell_lines_fast will make with this seed. This is the
+       case most likely to catch a real divergence: resampling with
+       replacement duplicates rows and therefore introduces ties, and
+       Spearman-with-ties equals Pearson-of-ranks only when tie-averaged ranks
+       are used throughout. The unresampled data alone cannot exercise that.
+
+    Raises AssertionError on any mismatch in either case rather than falling
+    back silently: a bootstrap distribution built on a metric that quietly
+    diverged from the one every other number in this project uses would be
+    worse than not having one.
+    """
+    _assert_fast_matches_reference(y_true, predictions, "unresampled", tol)
+
+    n_lines = y_true.shape[0]
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, n_lines, size=n_lines)
+    resampled_predictions = {name: pred[idx] for name, pred in predictions.items()}
+    _assert_fast_matches_reference(
+        y_true[idx], resampled_predictions, "one seeded resample (with ties)", tol
+    )
+
+
+def bootstrap_over_cell_lines_fast(
+    y_true: np.ndarray,
+    predictions: dict,
+    n_boot: int,
+    seed: int,
+    progress_every: int = 50,
+) -> dict:
+    """
+    Vectorised counterpart to bootstrap_over_cell_lines.
+
+    Draws the identical resample sequence -- same seed, same rng calls in the
+    same order, one draw of n_lines indices per resample, models scored in the
+    same order within it -- so its output is bit-for-bit interchangeable with
+    the loop version's. The only difference is how each resample is scored:
+    fully-observed columns (precomputed once, before the loop, since
+    missingness does not change under resampling) go through
+    fast_per_target_spearman's vectorised block instead of a per-column loop.
+
+    Caller must have already run verify_fast_bootstrap_matches on these same
+    (y_true, predictions) before calling this -- this function does not check.
+    """
+    rng = np.random.default_rng(seed)
+    n_lines = y_true.shape[0]
+    names = list(predictions)
+    draws = {name: np.full(int(n_boot), np.nan, dtype=float) for name in names}
+
+    fully_observed = {
+        name: (
+            np.all(np.isfinite(y_true), axis=0)
+            & np.all(np.isfinite(predictions[name]), axis=0)
+        )
+        for name in names
+    }
+
+    for b in range(int(n_boot)):
+        idx = rng.integers(0, n_lines, size=n_lines)
+        y_resampled = y_true[idx]
+        for name in names:
+            rho = fast_per_target_spearman(
+                y_resampled,
+                predictions[name][idx],
+                fully_observed_mask=fully_observed[name],
+            )
+            if np.isfinite(rho).any():
+                draws[name][b] = float(np.nanmean(rho))
+        if progress_every and (b + 1) % progress_every == 0:
+            print(f"        {b + 1}/{int(n_boot)} resamples [fast]", flush=True)
+
+    return draws
+
+
 def percentile_ci(draws: np.ndarray, level: float = 95.0) -> tuple:
     """Percentile interval of a bootstrap distribution, ignoring NaN draws."""
     finite = np.asarray(draws, dtype=float)
@@ -581,6 +833,16 @@ def main() -> int:
     parser.add_argument(
         "--force-refit", action="store_true",
         help="Ignore any saved prediction matrices and refit both models here.",
+    )
+    parser.add_argument(
+        "--fast", action="store_true",
+        help=(
+            "Use the vectorised bootstrap (section 9.2 of CLAUDE.md) instead of "
+            "the per-column loop. Verified against baseline.per_target_spearman "
+            "on the unresampled data before it is used; aborts rather than "
+            "falling back silently if that check fails. Default off -- the "
+            "loop is what produced every committed analysis_results.json."
+        ),
     )
     args = parser.parse_args()
 
@@ -927,9 +1189,52 @@ def main() -> int:
     print("  into the rank correlation. spearmanr averages tied ranks, so this")
     print("  is correct -- but state it in the methods section.\n")
 
-    draws = bootstrap_over_cell_lines(
-        y_true, bootstrap_inputs, args.bootstrap, args.seed
-    )
+    cols_with_nan = np.any(~np.isfinite(y_true), axis=0)
+    print(f"  val truth matrix    : {int(cols_with_nan.sum())} of {y_true.shape[1]} "
+          f"target columns contain a NaN ({int(np.sum(~np.isfinite(y_true)))} "
+          f"NaN cells total)")
+    if cols_with_nan.any():
+        print("    fast_per_target_spearman's per-column fallback branch runs "
+              "on real data for these columns.")
+    else:
+        print("    every target column is fully observed here, so "
+              "fast_per_target_spearman's fallback branch never runs on real "
+              "data -- see self_test_fast_fallback_branch for synthetic "
+              "coverage of it.")
+
+    if args.fast:
+        print("\n  --fast given. Running the synthetic fallback-branch self-test...")
+        try:
+            self_test_fast_fallback_branch()
+        except AssertionError as exc:
+            print(f"\n  *** {exc}")
+            print("\n      Stopping.")
+            return 1
+        print("  Self-test passed.")
+
+        print("\n  Verifying the vectorised path against "
+              "baseline.per_target_spearman,")
+        print("  on the unresampled data and on one seeded resample (with ties)...")
+        try:
+            verify_fast_bootstrap_matches(y_true, bootstrap_inputs, seed=args.seed)
+        except AssertionError as exc:
+            print(f"\n  *** {exc}")
+            print("\n      Stopping. Not falling back to the loop silently -- ")
+            print("      re-run without --fast, or fix the mismatch.")
+            return 1
+        print("  Verified: exact match in both cases. Running the vectorised "
+              "bootstrap.\n")
+        bootstrap_start = time.perf_counter()
+        draws = bootstrap_over_cell_lines_fast(
+            y_true, bootstrap_inputs, args.bootstrap, args.seed
+        )
+        bootstrap_elapsed = time.perf_counter() - bootstrap_start
+    else:
+        bootstrap_start = time.perf_counter()
+        draws = bootstrap_over_cell_lines(
+            y_true, bootstrap_inputs, args.bootstrap, args.seed
+        )
+        bootstrap_elapsed = time.perf_counter() - bootstrap_start
 
     delta_draws = draws["ridge_head"] - draws["ridge_pca"]
     delta_summary = summarise_draws(delta_draws)
@@ -1010,6 +1315,11 @@ def main() -> int:
         print("\n  The interval excludes zero: the deficit survives resampling")
         print("  of the held-out cell lines at the 95% level.")
     print(f"  {'-' * 70}")
+    print(f"  bootstrap elapsed       : {bootstrap_elapsed:.2f}s "
+          f"({'vectorised --fast' if args.fast else 'per-column loop'} path, "
+          f"{args.bootstrap} resamples)")
+    print("  Not written to analysis_results.json -- wall-clock time is not a")
+    print("  reproducible artifact and would break the byte-identical guarantee.")
 
     # ---- write ----------------------------------------------------------
     payload = {
