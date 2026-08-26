@@ -206,11 +206,28 @@ def main() -> int:
         "Any external data mapped through gene_columns.json would be "
         "misaligned against the trained model.",
     )
+    # Frozen legacy build asymmetry, not a general allowance: build_dataset.py
+    # never re-sliced the saved crispr matrix after 3 columns were dropped
+    # from expression only. See config.CRISPR_LEGACY_EXTRA_GENES for the full
+    # history. This asserts full set equality against canonical plus exactly
+    # those 3 named columns -- catching both a new extra column (checked
+    # above by the old form) AND a canonical gene silently disappearing from
+    # crispr, which a one-sided subset/difference check would miss.
+    crispr_genes = set(crispr.columns)
+    canonical_genes = set(canonical)
+    expected_crispr_genes = canonical_genes | config.CRISPR_LEGACY_EXTRA_GENES
+    missing_canonical = canonical_genes - crispr_genes
+    unexpected_extra = crispr_genes - expected_crispr_genes
     result.check(
-        "crispr columns are a subset of the canonical space",
-        set(crispr.columns) <= set(canonical),
-        f"{len(set(crispr.columns) - set(canonical))} crispr columns are "
-        f"outside the canonical gene space",
+        "crispr columns equal the canonical space plus the named frozen "
+        "legacy exception, exactly",
+        crispr_genes == expected_crispr_genes,
+        f"{len(missing_canonical)} canonical gene(s) missing from crispr "
+        f"{sorted(missing_canonical)[:10]}; {len(unexpected_extra)} "
+        f"unexpected extra column(s) {sorted(unexpected_extra)[:10]}. "
+        f"Expected extras are exactly {sorted(config.CRISPR_LEGACY_EXTRA_GENES)} "
+        f"(see config.CRISPR_LEGACY_EXTRA_GENES). This is a NEW discrepancy, "
+        f"not the known one -- do not wave it through.",
     )
     result.check(
         "gene_columns.json is internally consistent",
@@ -299,6 +316,14 @@ def main() -> int:
         set(selective_genes) <= set(crispr.columns),
         f"{len(set(selective_genes) - set(crispr.columns))} selective genes "
         f"are missing from the matrix",
+    )
+    result.check(
+        "the 3 frozen legacy extra crispr columns are absent from the "
+        "selective (published) target set",
+        set(selective_genes).isdisjoint(config.CRISPR_LEGACY_EXTRA_GENES),
+        f"one or more of {sorted(config.CRISPR_LEGACY_EXTRA_GENES)} has "
+        f"entered selective_genes.json -- this would mean a published "
+        f"result now depends on the legacy build asymmetry.",
     )
     if selective_genes:
         subset = crispr[selective_genes].to_numpy()

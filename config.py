@@ -233,6 +233,37 @@ MIN_EXPRESSION_STD = 0.0         # 0.0 keeps all genes; raise to drop flat ones
 DROP_ALL_ZERO_EXPRESSION = True  # drop genes that are zero in every line
 
 # --------------------------------------------------------------------------
+# Frozen legacy build asymmetry -- do not "fix" without going through
+# CLAUDE.md section 13 first (diagnosed 2026-08-26)
+# --------------------------------------------------------------------------
+# build_dataset.py intersects expression and crispr by Entrez ID, then drops
+# all-zero-expression columns from `expression` only (DROP_ALL_ZERO_EXPRESSION
+# above); the surviving set becomes the canonical space written to
+# gene_columns.json / gene_id_map.csv. The equivalent drop was never applied
+# back to the saved `crispr_effect` matrix, so it carries 3 columns outside
+# the canonical space. join_report.json's "expression_features" block records
+# only the *count* of genes dropped (dropped_all_zero: 3) -- it does not
+# record which genes. Their identities were established by direct diff
+# against gene_columns.json during manual investigation (2026-08-26) and are
+# pinned by name below, so that a future, *different* discrepancy still fails
+# checks.py loudly instead of being silently absorbed into a general
+# allowance.
+#
+# Confirmed (against data/processed/selective_genes.json, 2026-08-26): all
+# three are absent from the 4,297 published CRISPR targets, and every
+# modelling path (baseline.py, train_head.py, analysis.py) always subsets
+# crispr via selective_genes, never via the full column set -- this asymmetry
+# has never touched any committed result. Re-running build_dataset.py would
+# rewrite crispr_effect.npz, gene_id_map.csv, gene_columns.json,
+# selective_genes.json and join_report.json together; that is a material
+# change to input data under CLAUDE.md section 13 and needs sign-off first.
+CRISPR_LEGACY_EXTRA_GENES = frozenset({
+    "KRTAP23-1 (337963)",
+    "DEFB113 (245927)",
+    "KRTAP20-3 (337985)",
+})
+
+# --------------------------------------------------------------------------
 # Splits
 # --------------------------------------------------------------------------
 
