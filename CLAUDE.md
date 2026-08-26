@@ -39,10 +39,24 @@ as much as the result.
 These are the things that make the project defensible. Breaking one silently is worse than
 not making the change at all.
 
-1. **`baseline_results.json` must stay byte-identical.** A fresh clone reproducing this
-   file byte-for-byte is the strongest reproducibility claim the project makes. After any
-   change to `baseline.py`, run `py baseline.py --split val` and confirm the file does
-   **not** appear in `git status`. It is tracked and marked binary, so git compares raw bytes.
+1. **`baseline_results.json`'s model-behaviour values must stay byte-identical.**
+   Every existing key — selected alpha, the alpha sweep, all spearman and r2
+   statistics — must reproduce exactly after any change to `baseline.py`. A fresh
+   clone reproducing those values is the strongest reproducibility claim the
+   project makes.
+
+   Adding a *new* key that records something previously unrecorded is permitted,
+   but only when every existing value is unchanged, and it must be called out in
+   the commit message. Verify with:
+
+       py baseline.py --split val
+       git diff --text data/processed/baseline_results.json
+
+   The `--text` is required; `.gitattributes` marks the directory binary. Read the
+   diff. Additions only, no modifications to existing lines, or stop and diagnose.
+
+   Last permitted schema change: `alpha_at_grid_boundary` on `ridge_pca`, commit
+   after `9a690d0`.
 
 2. **The test split has been touched zero times. Keep it that way.** Do not run
    `--split test` on anything. It runs exactly once, with all models together, only after

@@ -394,6 +394,14 @@ def run_ridge_pca(
         )
 
     info["alpha"] = chosen_alpha
+    if len(alphas) > 1 and chosen_alpha in (min(alphas), max(alphas)):
+        info["alpha_at_grid_boundary"] = True
+        info["alpha_warning"] = (
+            f"alpha={chosen_alpha:g} is at the edge of the grid "
+            f"[{min(alphas):g}, {max(alphas):g}]; widen RIDGE_ALPHAS and re-run."
+        )
+    else:
+        info["alpha_at_grid_boundary"] = False
 
     model = Ridge(alpha=chosen_alpha)
     model.fit(Z_train, Y_train)

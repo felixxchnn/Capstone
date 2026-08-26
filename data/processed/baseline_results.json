@@ -81,6 +81,7 @@
           },
           "alpha_selected_on": "grouped 5-fold CV inside the training set",
           "alpha": 100000.0,
+          "alpha_at_grid_boundary": false,
           "spearman_mean": 0.2356,
           "spearman_median": 0.2302,
           "spearman_q25": 0.1439,
