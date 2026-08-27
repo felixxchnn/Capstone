@@ -1,8 +1,8 @@
 # CLAUDE.md
 
 Operating instructions for Claude Code in this repository. Read this before touching
-anything. Last updated 2026-08-25 at commit `9381c5e`, plus the uncommitted Phase 2 scope
-addition (§9.7, §13) landing in the next commit.
+anything. Last updated 2026-08-27 at commit `9716f08`, plus the uncommitted Phase 2
+external-sample loader (`sample_profile.py`, §7, §9.7) landing in the next commit.
 
 ---
 
@@ -189,7 +189,7 @@ attrition zero.
 
 ## 7. Module map
 
-Thirteen modules today; Phase 2 (§9.7) adds more. Nine have been read in full.
+Fourteen modules today; Phase 2 (§9.7) adds more. Ten have been read in full.
 
 | Module | Role | Read? |
 |---|---|---|
@@ -198,17 +198,21 @@ Thirteen modules today; Phase 2 (§9.7) adds more. Nine have been read in full.
 | `baseline.py` | `prepare_task`, `impute_with_train_mean`, `per_target_spearman`, `evaluate`, `run_global_mean`, `run_lineage_mean`, `run_ridge_pca`, `_select_alpha_inner_cv`, `save_prediction_bundle`, `verify_prediction_bundle` | yes |
 | `train_head.py` | `load_embeddings`, `prepare_task`, `run_ridge_head`, `run_mlp_head`, `HEAD_RIDGE_ALPHAS` | yes |
 | `analysis.py` | A1–A4: bootstrap CI, Wilcoxon, per-target correlation, effective df; `--fast` vectorised path | yes (authored) |
-| `gene_ids.py` | `parse_gene_label`, `intersect_gene_spaces`, `canonical_labels`, `map_external_matrix` — Entrez is the join key throughout; no Ensembl handling here (see `prepare_geneformer_input.py`). `map_external_matrix`'s `fill_value` defaults to `0.0`, not NaN — callers reindexing a truly external sample must override it or "missing" and "measured zero" silently collide. Its symbol-matching pass uses `lookup.setdefault`, so duplicate external symbols silently keep whichever is seen first. | yes |
+| `gene_ids.py` | `parse_gene_label`, `intersect_gene_spaces`, `canonical_labels`, `map_external_matrix` — Entrez is the join key throughout; no Ensembl handling here (see `prepare_geneformer_input.py`). `map_external_matrix`'s `fill_value` defaults to `0.0`, not NaN — callers reindexing a truly external sample must override it or "missing" and "measured zero" silently collide. Its symbol-matching pass uses `lookup.setdefault`, so duplicate external symbols silently keep whichever is seen first. For those two reasons `sample_profile.py` does its own canonical reindex rather than calling `map_external_matrix`. | yes |
 | `build_dataset.py` | Joins DepMap CSVs into the processed matrices; `expression.npz` is `log2(TPM+1)`, confirmed both from this module's docstring and from the committed values (max 15.37) | yes (expression/CRISPR/metadata/PRISM loaders and the osteosarcoma section) |
-| `prepare_geneformer_input.py` | Reconstructs pseudo-counts from log-TPM (`TPM = 2**log_tpm - 1`) since Geneformer wants raw counts and DepMap ships log-TPM; maps canonical `SYMBOL (ENTREZ)` to Ensembl via `ensembl_map.csv` (columns `entrez,ensembl_id`), built once via `mygene` (Kaggle-only) and cached. **That cache file does not exist anywhere in this repository** — confirmed via `git log --all` and a filesystem search — so the 18,460/18,460 zero-attrition Ensembl mapping was produced and consumed entirely on Kaggle and never carried back here. Regenerating it locally needs either `mygene` (absent) or a substitute static Entrez↔Ensembl reference. | yes |
+| `prepare_geneformer_input.py` | Reconstructs pseudo-counts from log-TPM (`TPM = 2**log_tpm - 1`) since Geneformer wants raw counts and DepMap ships log-TPM; maps canonical `SYMBOL (ENTREZ)` to Ensembl via `ensembl_map.csv` (columns `entrez,ensembl_id`). The frozen Kaggle embeddings used a `mygene`-built map with 18,460/18,460 zero attrition, and that Kaggle cache was never carried back here. `data/processed/ensembl_map.csv` **now exists** — committed in `d78fbf8`, rebuilt from the static NCBI `gene2ensembl` reference (not `mygene`), coverage **18,459/18,460**; the one gap is Entrez `79400` (NOX5), which NCBI carries no Ensembl xref for. A local `prepare_geneformer_input` re-run would therefore drop NOX5 (`genes_dropped_no_ensembl == 1`); the frozen `geneformer_embeddings.csv` is unaffected. Full provenance: `capstone/data-integrity-hashes.md`. | yes |
+| `sample_profile.py` | Phase 2 external-sample loader. `parse_gct` (GCT v1.2 schema validation) + `load_external_sample`: reads the committed `BG003082.gene_tpm.gct.gz` (linear TPM, versioned Ensembl IDs), strips Ensembl version suffixes, joins to canonical Entrez via `ensembl_map.csv` **only** (no symbol fallback — see the module docstring for why), sums linear TPM within a canonical gene, reindexes to `gene_columns.json` order, `log2(TPM+1)`, leaves unresolved canonical genes as explicit `NaN` (never 0), returns `(Series, provenance dict)`. Does not impute, call a model, or write to `data/processed/`. `--self-test` covers the schema/edge cases offline. | yes (authored) |
 | `splits.py` | Patient-grouped, lineage-stratified split generation | no |
 | `checks.py` | Integrity assertions; fails the run on group straddling; 8 sections including PRISM and osteosarcoma coverage | yes |
 | `make_fixture.py` | Synthetic fixture generation mirroring real DepMap file structure, including a synthetic Bone/Osteosarcoma subset and a synthetic PRISM matrix | yes |
 | `run_geneformer_embeddings.py` | Embedding extraction; ran on Kaggle | no |
 | `inspect_data.py` | Ad-hoc inspection, three hard-coded raw filenames read via bare `pd.read_csv`, not `config.resolve_file`/`RAW_DIR`. Unrunnable from a clone (raw CSVs gitignored) even before that. Ship-or-cut undecided. | yes |
 
-**`data/processed`** holds 15 tracked files. `data/processed/predictions/` is gitignored —
-12 files, ~12 MB, regenerable in ~3 minutes from `--save-predictions` on both modules.
+**`data/processed`** holds 16 tracked files (the 15 Phase 1 artifacts plus
+`ensembl_map.csv`, added in `d78fbf8`). `data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz`
+is the one file under `data/external/` (also `d78fbf8`). `data/processed/predictions/` is
+gitignored — 12 files, ~12 MB, regenerable in ~3 minutes from `--save-predictions` on both
+modules.
 **PRISM (`prism_response`) is fully wired end to end in code — `config.py`'s three
 `prism_*` aliases, `build_dataset.load_prism`, both `run_task` functions' `task="prism"`
 branch, `checks.py` §7, `analysis.py --task prism` — but no raw PRISM file has ever been
@@ -358,9 +362,20 @@ each playing a different, explicitly labeled role:
 This does not touch any Phase 1 invariant, split, or committed result. `E1`/`E3`/model-set
 freeze/F1 (§9.3–9.6) proceed independently; `D1`-numbered items below are additive.
 `E2` (§9.4) is deprioritized past October given the added workload — see the full plan for
-the complete design (gene-ID reconciliation order, the missing `ensembl_map.csv`, log-scale
-handling, the DGIdb evidence schema, the interactive static-HTML report):
+the complete design (gene-ID reconciliation order, log-scale handling, the DGIdb evidence
+schema, the interactive static-HTML report):
 `C:\Users\Leo He\.claude\plans\moonlit-dazzling-dream.md`.
+
+**Progress.** Committed inputs: `data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz` and
+`data/processed/ensembl_map.csv` (both `d78fbf8`). **`sample_profile.py` — the external-sample
+loader — is implemented and validated** (`--self-test` green; real BG003082 load: 18,427 / 18,460
+canonical genes resolved via Ensembl-ID join, 33 left as explicit `NaN`, 0 identifier collisions,
+deterministic). It deliberately does **not** do the plan's step-4 symbol fallback (rescues only 4
+of the 33; would reintroduce cross-provenance mixing the `ensembl_map.csv` single-provenance
+decision rejected — see the module docstring). Still to build: the Geneformer embedding for
+BG003082, `evidence.py` (DGIdb), `case_study.py` (orchestration + no-leakage / ranking-direction
+assertions + osteosarcoma-aggregate stat), `report.py` (offline HTML), the committed DGIdb
+snapshot, and `checks.py` reconciliation/evidence sections.
 
 ---
 

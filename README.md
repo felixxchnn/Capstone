@@ -12,10 +12,13 @@ quantified negative result, not a failed experiment. See "Reading the results" b
 `data/processed/{baseline_results,head_results,analysis_results}.json` for every number and
 its provenance.
 
-**Phase 2 (approved scope, not yet implemented):** a proof-of-concept application layer that
+**Phase 2 (approved scope, in progress):** a proof-of-concept application layer that
 uses Phase 1's frozen models to rank predicted CRISPR dependencies for two samples and
-connects the top-ranked genes to cited drug–gene interaction evidence. See "Phase 2" below
-and `capstone/scope-decisions.md` for the full approved scope.
+connects the top-ranked genes to cited drug–gene interaction evidence. So far the external
+inputs are committed (`data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz`,
+`data/processed/ensembl_map.csv`) and the external-sample loader (`sample_profile.py`) is
+implemented and validated; the evidence layer, orchestration and report are still to come.
+See "Phase 2" below and `capstone/scope-decisions.md` for the full approved scope.
 
 ## Data and licences
 
@@ -23,7 +26,8 @@ and `capstone/scope-decisions.md` for the full approved scope.
 |---|---|---|
 | [DepMap](https://depmap.org/) — expression, CRISPR gene effect, model metadata | DepMap Public **26Q1**, downloaded 2026-07-22 | CC BY 4.0 |
 | [Geneformer](https://huggingface.co/ctheodoris/Geneformer) — `Geneformer-V2-104M_CLcancer` | V2, Dec 2024 | Apache 2.0 |
-| [Osteosarcoma dataset](https://osteosarc.com) (Sid Sijbrandij) — Phase 2, planned, not yet committed to this repo | — | CC0 1.0 |
+| [Osteosarcoma dataset](https://osteosarc.com) (Sid Sijbrandij) — Phase 2; sample `BG003082` gene-TPM GCT committed under `data/external/sid_osteosarc/` | — | CC0 1.0 |
+| NCBI [`gene2ensembl`](https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2ensembl.gz) — Phase 2; source for `data/processed/ensembl_map.csv` (Entrez↔Ensembl, 18,459/18,460 canonical genes) | retrieved 2026-08-27 | US-Gov public domain |
 
 **Data citation.** DepMap, Broad (2026). DepMap Public 26Q1. Dataset. https://depmap.org
 
@@ -116,6 +120,7 @@ independently of the code that built the file.
 | `train_head.py` | Ridge / MLP heads on frozen Geneformer embeddings. |
 | `analysis.py` | Bootstrap CI, paired per-target comparison, effective degrees of freedom. |
 | `make_fixture.py` | Synthetic data mirroring the real formats. |
+| `sample_profile.py` | Phase 2. Loads an external RNA-seq GCT (currently `BG003082`) into the frozen canonical gene space via Ensembl-ID join, with full reconciliation provenance. |
 
 `prepare_geneformer_input.py` and `run_geneformer_embeddings.py` produced
 `data/processed/geneformer_embeddings.csv`, but ran on Kaggle and are not
@@ -141,8 +146,9 @@ Written to `data/processed/`:
 - `baseline_results.json` — expression-baseline metrics (`baseline.py`)
 - `head_results.json` — Geneformer-head metrics (`train_head.py`)
 - `analysis_results.json` — bootstrap CI, paired comparison, effective df (`analysis.py`)
+- `ensembl_map.csv` — Phase 2. Entrez↔Ensembl cross-reference (NCBI `gene2ensembl`), 18,459/18,460 canonical genes (`NOX5` has no NCBI Ensembl xref). Consumed by `prepare_geneformer_input.py` and `sample_profile.py`.
 
-`join_report.txt` is methods-section material. "We intersected three DepMap
+16 files are tracked in `data/processed/`. `join_report.txt` is methods-section material. "We intersected three DepMap
 tables, reconciled 18,463 genes across two matrices by Entrez ID, and retained
 4,297 selective dependencies" is real provenance, and it's already written for you.
 
@@ -216,13 +222,21 @@ patient tumour profile quantified by a completely different pipeline — must be
 reindexed into exactly those columns, in exactly that order, or the trained
 model receives scrambled features and returns confident nonsense.
 
-`gene_ids.map_external_matrix()` does this, handling bare symbols, bare Entrez
-IDs, or `SYMBOL (ENTREZ)`, and reports how many genes matched. Built now
-because retrofitting it in September is genuinely painful.
+`gene_ids.map_external_matrix()` does this for symbol- or Entrez-labelled
+matrices, handling bare symbols, bare Entrez IDs, or `SYMBOL (ENTREZ)`, and
+reports how many genes matched. Built now because retrofitting it in September
+is genuinely painful.
+
+For an Ensembl-labelled external sample (the Phase 2 `BG003082` tumour GCT),
+`sample_profile.load_external_sample()` is the specific path: it validates the
+GCT schema, strips Ensembl version suffixes, joins to canonical Entrez through
+`data/processed/ensembl_map.csv`, sums linear TPM within a gene, applies
+`log2(TPM+1)`, and leaves unresolved canonical genes as explicit `NaN` rather
+than the `0.0` `map_external_matrix` would fill.
 
 ---
 
-## Phase 2 — proof-of-concept demo (approved scope, not yet implemented)
+## Phase 2 — proof-of-concept demo (approved scope, in progress)
 
 The October deliverable also includes a proof-of-concept application layer: using Phase 1's
 frozen models to rank predicted CRISPR dependencies for two samples, then connecting the
@@ -243,9 +257,17 @@ Two samples, two different, explicitly labeled roles:
   CRISPR screen exists for this tissue, and bulk tumor tissue is a real domain shift from the
   cultured cell lines the model was trained and validated on.
 
-**As of this commit, no Phase 2 code or external data lives in this repository** — no
-`data/external/`, no evidence-retrieval or report-generation modules. This section describes
-approved, not completed, work.
+**Status.** Committed so far: `data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz` (the
+external RNA-seq sample) and `data/processed/ensembl_map.csv` (Entrez↔Ensembl, from NCBI
+`gene2ensembl`). `sample_profile.py` — the loader that reads the GCT, validates it against
+the GCT v1.2 schema, reconciles its versioned Ensembl IDs to the frozen canonical gene space
+by Ensembl-ID join, and reports every reconciliation count — is implemented and validated
+(`py sample_profile.py --self-test`). For `BG003082`: 18,427 of 18,460 canonical genes
+resolve, 33 are left as explicit `NaN` (never zero-filled), and there are no identifier
+collisions. Still to come: the Geneformer embedding for `BG003082`, the drug–gene evidence
+retrieval layer (`evidence.py`), the orchestration (`case_study.py`) with its no-leakage and
+ranking-direction assertions, and the offline HTML report (`report.py`). No Phase 1
+artifact, split, or committed result is touched by any of this.
 
 **Evidence boundaries.** Ranking a predicted CRISPR dependency and citing drug–gene
 interaction evidence for it is not a treatment-efficacy estimate, not a patient-response
