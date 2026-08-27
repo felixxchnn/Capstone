@@ -248,11 +248,16 @@ Two samples, two different, explicitly labeled roles:
 approved, not completed, work.
 
 **Evidence boundaries.** Ranking a predicted CRISPR dependency and citing drug–gene
-interaction evidence for it is not a drug-response prediction, not a treatment-efficacy
-estimate, not a patient-response prediction, and not a clinical recommendation — none of
-those are modeled or claimed anywhere in this project. The evidence layer retrieves existing,
-cited interaction records; it does not predict anything. BG003082's prediction is never
-described as validated or compared to a measurement, because none exists for that tissue.
+interaction evidence for it is not a treatment-efficacy estimate, not a patient-response
+prediction, and not a clinical recommendation — none of those are modeled or claimed anywhere
+in this project. The evidence layer itself is not a drug-response prediction either: it
+retrieves existing, cited interaction records and does not predict anything. This is distinct
+from `prism_response` — real drug-response *prediction* infrastructure that does exist
+elsewhere in this codebase (`baseline.py`/`train_head.py`'s `task="prism"` path, `checks.py`
+§7), but has never been run because no raw PRISM file has ever been downloaded; it is no more
+part of Phase 2's evidence layer than it is part of Phase 1's headline result. BG003082's
+prediction is never described as validated or compared to a measurement, because none exists
+for that tissue.
 
 ---
 
