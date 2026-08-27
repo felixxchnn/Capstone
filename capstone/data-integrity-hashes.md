@@ -50,7 +50,43 @@ this table needs a new entry pinned to the new commit, not a silent overwrite of
 
 ## Phase 2 additions (§9.7)
 
-Hashes for `data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz`,
-`data/processed/ensembl_map.csv`, and the committed DGIdb snapshot will be appended here,
-each pinned to the commit that adds it, once those files exist. Not yet computed — do not
-invent placeholder hashes.
+### Added in commit `d78fbf8d6f8dbf749b8d8e101876d16340a66ad1` (branch `side-v1`)
+
+SHA-256 computed directly from the committed bytes (`hashlib.sha256`), not from memory.
+
+```
+652011a1cdb8ecf42812cc5fcd6c55947a77995ebe47893e3b307165467bb711  data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz  778,119 bytes
+c5c97ac03dd6bb4e4b9b1becea9c944e5e2742d4bc90af435ec3ddf6d66c1324  data/processed/ensembl_map.csv                       422,382 bytes
+```
+
+**`BG003082.gene_tpm.gct.gz`** — Sid Sijbrandij osteosarcoma primary-tumor RNA-seq, CC0 1.0.
+Retrieved 2026-08-27 by anonymous read from
+`s3://sid-sijbrandij-osteosarc-dataset/rna-seq/reprocessed/BG003082/BG003082.gene_tpm.gct.gz`
+(region `us-west-2`). The S3 object's `ETag` `28485ea587fdd33cbde140f1a150a10a` equals the
+file's MD5 (single-part upload); a fresh anonymous re-download is byte-identical to the
+committed file. `gzip -t` passes; it decompresses to 2,897,595 bytes / 74,631 lines — a GCT
+`#1.2` whose dimension line `74628\t1` matches its 74,628 data rows, columns
+`Name`/`Description`/`BG003082`, `Name` entirely versioned Ensembl gene IDs, no duplicates,
+TPM column non-negative and summing to exactly 1,000,000.
+
+**`ensembl_map.csv`** — Entrez→Ensembl cache for `prepare_geneformer_input.load_ensembl_map`
+(schema `entrez,ensembl_id`, both `str`, CRLF). Rebuilt from the static public reference
+**NCBI `gene2ensembl.gz`** (`https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2ensembl.gz`,
+`Last-Modified` 2026-08-26, `Content-Length` 312,693,647,
+SHA-256 `0030a333aeecf2151c57069bf3196ad9f89dc9ec0da5ee125b2256f9b068dbbf`, retrieved
+2026-08-27), **not** the original `mygene`/Kaggle path — a deliberate provenance difference,
+same Entrez join key. Method: filter `tax_id == 9606`; for each of the 18,460 canonical
+Entrez IDs in `gene_columns.json`, resolve to its Ensembl gene; when an Entrez had more than
+one Ensembl gene (18 cases), keep the one with the most transcript rows in `gene2ensembl`,
+breaking further ties by smallest ENSG accession (deterministic, row-order independent);
+rows written in `gene_columns.json` order. Coverage **18,459 / 18,460**. The one unmapped
+gene is Entrez `79400` (NOX5): NCBI `gene2ensembl` and `Homo_sapiens.gene_info` carry no
+Ensembl xref for it, and its true Ensembl ID (`ENSG00000255346`) was **not** patched in, to
+keep the file single-provenance — so a local re-run of `prepare_geneformer_input` drops NOX5
+(`genes_dropped_no_ensembl == 1`). The frozen Kaggle `geneformer_embeddings.csv` is
+unaffected. Verified through the real consumer: `load_ensembl_map` →
+`entrez_mapped=18459, entrez_unmapped=1`; `build_frames` →
+`genes_mapped_to_ensembl=18459, genes_dropped_no_ensembl=1, ensembl_collisions_dropped=0`.
+
+The committed DGIdb snapshot will be appended here, pinned to the commit that adds it, once
+that file exists. Not yet computed — do not invent placeholder hashes.
