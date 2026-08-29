@@ -139,7 +139,8 @@ def extract_embeddings(
     Extract one cell embedding per cell line, keyed on ModelID.
 
     Returns a DataFrame indexed by ModelID; columns are the embedding
-    dimensions (512 for the 104M model).
+    dimensions (768 for the Geneformer V2 104M model; the committed
+    geneformer_embeddings.csv and the 2026-08-06 Kaggle run both have 768).
     """
     from geneformer import EmbExtractor
 
