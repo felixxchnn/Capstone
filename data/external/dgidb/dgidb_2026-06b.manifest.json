@@ -1,0 +1,387 @@
+{
+  "artifact": "dgidb_2026-06b.interactions.filtered.tsv",
+  "description": "Licence-filtered offline snapshot of DGIdb drug-gene interaction records for Phase 2 evidence retrieval. Evidence retrieval only -- not treatment prediction, not a recommendation. Contains records ONLY from interaction sources whose redistribution terms are explicitly verified as compatible with committing them; the full DGIdb dataset is NOT redistributable.",
+  "dgidb": {
+    "release_tag": "2026-06b",
+    "release_page": "https://github.com/dgidb/dgidb-data/releases/tag/2026-06b",
+    "graphql_service_version": "v.5.0.12 (recorded 2026-08-29)",
+    "upstream_header_comments": {
+      "interactions.tsv": [
+        "# Data version: Dec-2023",
+        "# DGIdb version: v.5.0.11"
+      ],
+      "genes.tsv": [
+        "# Data version: Dec-2023",
+        "# DGIdb version: v.5.0.11"
+      ],
+      "drugs.tsv": [
+        "# Data version: Dec-2023",
+        "# DGIdb version: v.5.0.11"
+      ]
+    }
+  },
+  "assets": {
+    "interactions.tsv": {
+      "url": "https://github.com/dgidb/dgidb-data/releases/download/2026-06b/interactions.tsv",
+      "bytes": 16163629,
+      "sha256": "5a798ffdaddd775b8409fa22509d77d55c663ca84625808617a78b1fc75dcc9e",
+      "verified": true
+    },
+    "genes.tsv": {
+      "url": "https://github.com/dgidb/dgidb-data/releases/download/2026-06b/genes.tsv",
+      "bytes": 4248825,
+      "sha256": "e3cfcff1001fdad9e0079998e97934c6bc666ea54598b35c570d2c92829689e7",
+      "verified": true
+    },
+    "drugs.tsv": {
+      "url": "https://github.com/dgidb/dgidb-data/releases/download/2026-06b/drugs.tsv",
+      "bytes": 7253304,
+      "sha256": "f7d465c153d8235a61b9ad43322c98b1f15ace9577e6dc0250e27f19ac463ff5",
+      "verified": true
+    }
+  },
+  "retrieval": {
+    "retrieved_utc": "2026-08-29T18:59:20Z",
+    "method": "build from pre-staged assets that passed the exact size/SHA-256 gate",
+    "tool": "evidence.py build_snapshot"
+  },
+  "gene_identity": {
+    "primary_identifier": "entrez_id (canonical space)",
+    "method": "DGIdb gene_name (HGNC-approved symbol) with exactly one non-empty hgnc: concept id, joined to gene_columns.json by globally-unique symbol; canonical Entrez retained as the primary identity; symbol kept only as a consistency field; gene_claim_name / aliases never used; non-uniquely-resolvable genes dropped and counted.",
+    "canonical_space_file": "gene_columns.json",
+    "canonical_space_sha256": "a4b8069cc93af48f01e745bb1a15f4eaf4a7b67c9f92ca44bef3bb9e44c6d0a1",
+    "distinct_dgidb_genes": 4652,
+    "resolved_to_canonical_entrez": 4472,
+    "unresolved_no_or_multi_hgnc_concept": 7,
+    "unresolved_not_in_canonical_space": 173,
+    "symbol_consistency_failures": 0
+  },
+  "direction_vocabulary": {
+    "provenance": "DGIdb GraphQL interactionClaimTypes.directionality enum, retrieved 2026-08-29",
+    "tiers": [
+      "inhibitory",
+      "activating",
+      "unknown"
+    ],
+    "inhibitory": [
+      "antagonist",
+      "antibody",
+      "antisense oligonucleotide",
+      "blocker",
+      "cleavage",
+      "inhibitor",
+      "inhibitory allosteric modulator",
+      "inverse agonist",
+      "negative modulator",
+      "partial antagonist",
+      "suppressor"
+    ],
+    "activating": [
+      "activator",
+      "agonist",
+      "chaperone",
+      "cofactor",
+      "inducer",
+      "positive modulator",
+      "stimulator",
+      "vaccine"
+    ],
+    "unmapped_to_unknown_tier": "any interaction_types value not in the two lists above, including empty and internally-conflicting pipe-joined values"
+  },
+  "sources": {
+    "CIViC": {
+      "role": "interaction",
+      "dgidb_source_version": "08-June-2026",
+      "license": "Creative Commons CC0 1.0 Universal (CC0 1.0) Public Domain Dedication",
+      "license_url": "https://docs.civicdb.org/en/latest/about/faq.html#how-is-civic-licensed",
+      "redistribution_decision": "included",
+      "decision_reason": "CC0 1.0 public-domain dedication; redistribution unrestricted.",
+      "upstream_interaction_rows": 1182,
+      "retained_records": 1076
+    },
+    "ChEMBL": {
+      "role": "interaction",
+      "dgidb_source_version": "37",
+      "license": "Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)",
+      "license_url": "https://chembl.gitbook.io/chembl-interface-documentation/about#data-licensing",
+      "redistribution_decision": "included",
+      "decision_reason": "CC BY-SA 3.0; redistribution permitted with attribution and ShareAlike.",
+      "upstream_interaction_rows": 18202,
+      "retained_records": 12809
+    },
+    "GuideToPharmacology": {
+      "role": "interaction",
+      "dgidb_source_version": "2026.2",
+      "license": "Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)",
+      "license_url": "https://www.guidetopharmacology.org/about.jsp",
+      "redistribution_decision": "included",
+      "decision_reason": "CC BY-SA 4.0; redistribution permitted with attribution and ShareAlike.",
+      "upstream_interaction_rows": 17105,
+      "retained_records": 17049
+    },
+    "DoCM": {
+      "role": "interaction",
+      "dgidb_source_version": "2024-10-02",
+      "license": "Creative Commons Attribution 4.0 International (CC BY 4.0)",
+      "license_url": "https://github.com/griffithlab/docm/blob/c8d2a8723f505689074d07841931475b9b7e914c/app/views/static/about.html.haml#L86",
+      "redistribution_decision": "included",
+      "decision_reason": "CC BY 4.0; redistribution permitted with attribution.",
+      "upstream_interaction_rows": 76,
+      "retained_records": 72
+    },
+    "NCI": {
+      "role": "interaction",
+      "dgidb_source_version": "14-September-2017",
+      "license": "Public domain (U.S. National Cancer Institute)",
+      "license_url": "https://www.cancer.gov/policies/copyright-reuse",
+      "redistribution_decision": "included",
+      "decision_reason": "U.S. Government work, public domain; redistribution unrestricted.",
+      "upstream_interaction_rows": 6231,
+      "retained_records": 5939
+    },
+    "FDA": {
+      "role": "interaction",
+      "dgidb_source_version": "08-June-2026",
+      "license": "Public domain (U.S. Food and Drug Administration)",
+      "license_url": "https://www.fda.gov/about-fda/about-website/website-policies#linking",
+      "redistribution_decision": "included",
+      "decision_reason": "U.S. Government work, public domain; redistribution unrestricted.",
+      "upstream_interaction_rows": 427,
+      "retained_records": 391
+    },
+    "DTC": {
+      "role": "interaction",
+      "dgidb_source_version": "2020-09-02",
+      "license": "Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported (CC BY-NC-SA 3.0)",
+      "license_url": "https://academic.oup.com/database/article/doi/10.1093/database/bay083/5096727",
+      "redistribution_decision": "excluded",
+      "decision_reason": "NonCommercial clause (CC BY-NC-SA 3.0).",
+      "upstream_interaction_rows": 23879,
+      "retained_records": 0
+    },
+    "PharmGKB": {
+      "role": "interaction",
+      "dgidb_source_version": "20260622",
+      "license": "DGIdb labels 'CC BY-SA 4.0'; PharmGKB's own data-usage policy is a custom agreement, not a plain licence deed",
+      "license_url": "https://www.pharmgkb.org/page/dataUsagePolicy",
+      "redistribution_decision": "excluded",
+      "decision_reason": "Ambiguous / conflicting terms: DGIdb's CC BY-SA label is not reflected by PharmGKB's custom data-usage policy; project scope also excludes PharmGKB (CLAUDE.md section 10).",
+      "upstream_interaction_rows": 6545,
+      "retained_records": 0
+    },
+    "TTD": {
+      "role": "interaction",
+      "dgidb_source_version": "2020.06.01",
+      "license": "Unclear: site states 'All Rights Reserved'; 2002 publication describes it as open-access",
+      "license_url": "https://academic.oup.com/nar/article/30/1/412/1331814",
+      "redistribution_decision": "excluded",
+      "decision_reason": "Unclear / self-contradictory redistribution terms.",
+      "upstream_interaction_rows": 15245,
+      "retained_records": 0
+    },
+    "TdgClinicalTrial": {
+      "role": "interaction",
+      "dgidb_source_version": "Jan-2014",
+      "license": "Supplementary table from an Annual Reviews copyright publication",
+      "license_url": "https://www.annualreviews.org/doi/suppl/10.1146/annurev-pharmtox-011613-135943",
+      "redistribution_decision": "excluded",
+      "decision_reason": "No redistribution licence (copyrighted supplementary data).",
+      "upstream_interaction_rows": 5071,
+      "retained_records": 0
+    },
+    "TEND": {
+      "role": "interaction",
+      "dgidb_source_version": "01-Aug-2011",
+      "license": "Supplementary table from a Macmillan Publishers copyright publication",
+      "license_url": "https://www.nature.com/articles/nrd3478",
+      "redistribution_decision": "excluded",
+      "decision_reason": "No redistribution licence (copyrighted supplementary data).",
+      "upstream_interaction_rows": 2242,
+      "retained_records": 0
+    },
+    "CKB-CORE": {
+      "role": "interaction",
+      "dgidb_source_version": "2024-11-27",
+      "license": "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)",
+      "license_url": "https://ckb.genomenon.org/about/index",
+      "redistribution_decision": "excluded",
+      "decision_reason": "NonCommercial clause (CC BY-NC-SA 4.0).",
+      "upstream_interaction_rows": 2051,
+      "retained_records": 0
+    },
+    "MyCancerGenome": {
+      "role": "interaction",
+      "dgidb_source_version": "20-Jun-2017",
+      "license": "Restrictive, custom, non-commercial",
+      "license_url": "https://www.mycancergenome.org/content/page/legal-policies-licensing/",
+      "redistribution_decision": "excluded",
+      "decision_reason": "Restrictive custom NonCommercial terms.",
+      "upstream_interaction_rows": 821,
+      "retained_records": 0
+    },
+    "MyCancerGenomeClinicalTrial": {
+      "role": "interaction",
+      "dgidb_source_version": "30-Feburary-2014",
+      "license": "Restrictive, custom, non-commercial",
+      "license_url": "https://www.mycancergenome.org/content/page/legal-policies-licensing/",
+      "redistribution_decision": "excluded",
+      "decision_reason": "Restrictive custom NonCommercial terms.",
+      "upstream_interaction_rows": 316,
+      "retained_records": 0
+    },
+    "TALC": {
+      "role": "interaction",
+      "dgidb_source_version": "12-May-2016",
+      "license": "Data extracted from tables in an Elsevier copyright publication",
+      "license_url": "https://www.sciencedirect.com/science/article/pii/S1525730413002350",
+      "redistribution_decision": "excluded",
+      "decision_reason": "No redistribution licence (copyrighted publication tables).",
+      "upstream_interaction_rows": 602,
+      "retained_records": 0
+    },
+    "CGI": {
+      "role": "interaction",
+      "dgidb_source_version": "2022-02-01",
+      "license": "Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)",
+      "license_url": "https://www.cancergenomeinterpreter.org/faq#q19",
+      "redistribution_decision": "excluded",
+      "decision_reason": "NonCommercial clause (CC BY-NC 4.0).",
+      "upstream_interaction_rows": 368,
+      "retained_records": 0
+    },
+    "ClearityFoundationClinicalTrial": {
+      "role": "interaction",
+      "dgidb_source_version": "15-June-2013",
+      "license": "Unknown; data no longer publicly available from the source site",
+      "license_url": "https://www.clearityfoundation.org/about-clearity/contact/",
+      "redistribution_decision": "excluded",
+      "decision_reason": "Unknown / unverifiable terms; source data no longer available.",
+      "upstream_interaction_rows": 240,
+      "retained_records": 0
+    },
+    "ClearityFoundationBiomarkers": {
+      "role": "interaction",
+      "dgidb_source_version": "26-July-2013",
+      "license": "Unknown; data no longer publicly available from the source site",
+      "license_url": "https://www.clearityfoundation.org/about-clearity/contact/",
+      "redistribution_decision": "excluded",
+      "decision_reason": "Unknown / unverifiable terms; source data no longer available.",
+      "upstream_interaction_rows": 163,
+      "retained_records": 0
+    },
+    "OncoKB": {
+      "role": "interaction",
+      "dgidb_source_version": "23-July-2020",
+      "license": "Restrictive, non-commercial",
+      "license_url": "https://www.oncokb.org/terms",
+      "redistribution_decision": "excluded",
+      "decision_reason": "Restrictive NonCommercial terms.",
+      "upstream_interaction_rows": 148,
+      "retained_records": 0
+    },
+    "CancerCommons": {
+      "role": "interaction",
+      "dgidb_source_version": "25-Jul-2013",
+      "license": "Custom non-commercial",
+      "license_url": "https://www.cancercommons.org/terms-of-use/",
+      "redistribution_decision": "excluded",
+      "decision_reason": "Custom NonCommercial terms.",
+      "upstream_interaction_rows": 109,
+      "retained_records": 0
+    },
+    "COSMIC": {
+      "role": "interaction",
+      "dgidb_source_version": "4-Sep-2020",
+      "license": "Free for non-commercial use only",
+      "license_url": "https://cancer.sanger.ac.uk/cosmic/license",
+      "redistribution_decision": "excluded",
+      "decision_reason": "NonCommercial-only; redistribution requires a COSMIC licence.",
+      "upstream_interaction_rows": 37,
+      "retained_records": 0
+    }
+  },
+  "filter": {
+    "included_sources": [
+      "CIViC",
+      "ChEMBL",
+      "DoCM",
+      "FDA",
+      "GuideToPharmacology",
+      "NCI"
+    ],
+    "excluded_sources": [
+      "CGI",
+      "CKB-CORE",
+      "COSMIC",
+      "CancerCommons",
+      "ClearityFoundationBiomarkers",
+      "ClearityFoundationClinicalTrial",
+      "DTC",
+      "MyCancerGenome",
+      "MyCancerGenomeClinicalTrial",
+      "OncoKB",
+      "PharmGKB",
+      "TALC",
+      "TEND",
+      "TTD",
+      "TdgClinicalTrial"
+    ],
+    "upstream_interaction_rows_total": 101060,
+    "rows_from_included_sources": 43223,
+    "rows_dropped_unresolved_gene": 5591,
+    "rows_dropped_no_drug_identity": 295,
+    "duplicate_records_collapsed": 1,
+    "records_written": 37336
+  },
+  "direction_tier_counts": {
+    "inhibitory": 20121,
+    "activating": 7615,
+    "unknown": 9600
+  },
+  "snapshot": {
+    "file": "dgidb_2026-06b.interactions.filtered.tsv",
+    "columns": [
+      "entrez_id",
+      "gene_symbol",
+      "dgidb_gene_concept_id",
+      "dgidb_gene_name",
+      "gene_symbol_consistent",
+      "drug_name",
+      "drug_concept_id",
+      "drug_claim_name",
+      "interaction_source",
+      "interaction_source_version",
+      "interaction_type_raw",
+      "interaction_direction",
+      "interaction_score",
+      "drug_specificity_score",
+      "gene_specificity_score",
+      "evidence_score",
+      "drug_is_approved",
+      "drug_is_immunotherapy",
+      "drug_is_antineoplastic",
+      "pmids",
+      "curation_type",
+      "indication",
+      "source_license",
+      "source_license_url",
+      "dgidb_release_tag",
+      "record_key"
+    ],
+    "bytes": 13930492,
+    "sha256": "7a9d0bf7c208075aeb56dfa7af30041cec7b33bf91c90a8999914a4f25655a45",
+    "record_count": 37336,
+    "sort_order": "entrez_id, direction tier, interaction_score desc (empty last), interaction_source, drug_name, drug_concept_id, drug_claim_name, interaction_type_raw, record_key",
+    "row_ordering_note": "Deterministic evidence-DISPLAY ordering, for reproducibility only. NOT predicted efficacy, clinical priority, or recommendation strength. Approval and indication never affect ordering."
+  },
+  "absent_fields": {
+    "pmids": "DGIdb 2026-06b interactions.tsv has no publication-identifier column; PMIDs embedded in free-text drug names are NOT parsed (that would be inference). Always empty.",
+    "curation_type": "No curation/evidence-type column in this export; the numeric evidence_score is retained instead. Always empty.",
+    "indication": "No disease/indication column in this export. Always empty."
+  },
+  "disclaimer": "A recorded drug–gene interaction does not establish efficacy for this sample or for osteosarcoma.",
+  "scope": {
+    "statement": "Evidence retrieval only. Not treatment prediction, not a recommendation. No efficacy, clinical relevance, approval, indication, interaction direction beyond DGIdb's explicit vocabulary, or osteosarcoma relevance is inferred. The returned drugs are not candidate treatments.",
+    "redistribution": "Snapshot contains records ONLY from the explicitly-verified redistributable interaction sources listed under filter.included_sources. The full DGIdb dataset is NOT redistributable."
+  }
+}

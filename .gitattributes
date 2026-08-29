@@ -2,3 +2,4 @@
 # checkin or checkout. This keeps the recorded SHA-256 checksums
 # verifiable after a clone on any platform.
 data/processed/** -text
+data/external/** -text

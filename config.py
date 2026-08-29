@@ -396,6 +396,74 @@ ENSEMBL_MAP_FILE = PROCESSED_DIR / "ensembl_map.csv"
 TOP_N_DEPENDENCIES = 25     # genes shown per sample in the ranked-dependency table
 TOP_K_EVIDENCE_PER_GENE = 5  # interaction records shown per gene, per direction tier
 
+# --------------------------------------------------------------------------
+# Phase 2 -- DGIdb drug-gene interaction *evidence retrieval* layer
+# (evidence.py). This is cited-interaction retrieval, NOT drug-response
+# prediction and NOT a treatment recommendation: no model is attached, no
+# efficacy / clinical relevance / approval / indication / osteosarcoma
+# relevance is ever inferred. Distinct from `prism_response` above (which is
+# drug-response prediction infrastructure) and from any CPIC/PharmGKB safety
+# layer (out of scope -- capstone/scope-decisions.md, CLAUDE.md section 10).
+# --------------------------------------------------------------------------
+
+# Authoritative upstream release. Pinned to an immutable tag + per-asset
+# byte size and SHA-256 so a refresh cannot silently pull a moving "latest".
+DGIDB_RELEASE_TAG = "2026-06b"
+DGIDB_RELEASE_PAGE = (
+    "https://github.com/dgidb/dgidb-data/releases/tag/2026-06b"
+)
+_DGIDB_ASSET_BASE = (
+    "https://github.com/dgidb/dgidb-data/releases/download/2026-06b"
+)
+DGIDB_ASSETS: dict[str, dict[str, object]] = {
+    "interactions.tsv": {
+        "url": f"{_DGIDB_ASSET_BASE}/interactions.tsv",
+        "bytes": 16_163_629,
+        "sha256":
+            "5a798ffdaddd775b8409fa22509d77d55c663ca84625808617a78b1fc75dcc9e",
+    },
+    "genes.tsv": {
+        "url": f"{_DGIDB_ASSET_BASE}/genes.tsv",
+        "bytes": 4_248_825,
+        "sha256":
+            "e3cfcff1001fdad9e0079998e97934c6bc666ea54598b35c570d2c92829689e7",
+    },
+    "drugs.tsv": {
+        "url": f"{_DGIDB_ASSET_BASE}/drugs.tsv",
+        "bytes": 7_253_304,
+        "sha256":
+            "f7d465c153d8235a61b9ad43322c98b1f15ace9577e6dc0250e27f19ac463ff5",
+    },
+}
+
+# Tracked, committed offline artifacts (filtered snapshot + provenance
+# manifest). The unfiltered upstream TSVs are NEVER committed here.
+DGIDB_SNAPSHOT_FILE = DGIDB_DIR / f"dgidb_{DGIDB_RELEASE_TAG}.interactions.filtered.tsv"
+DGIDB_MANIFEST_FILE = DGIDB_DIR / f"dgidb_{DGIDB_RELEASE_TAG}.manifest.json"
+
+# Attached verbatim to every evidence record returned for display.
+DGIDB_EVIDENCE_DISCLAIMER = (
+    "A recorded drug–gene interaction does not establish efficacy for this "
+    "sample or for osteosarcoma."
+)
+
+# The only interaction-direction buckets. Normalised strictly from DGIdb's own
+# interaction-type -> directionality vocabulary (evidence.DIRECTIONALITY_BY_TYPE),
+# never from drug names, free text, approval, or indication.
+DGIDB_DIRECTION_TIERS = ("inhibitory", "activating", "unknown")
+
+# Interaction sources whose redistribution terms are *explicitly verified* as
+# compatible with committing the filtered records (CC0 / CC BY / CC BY-SA /
+# US-government public domain -- no NonCommercial clause, no "unclear" terms).
+# DGIdb aggregates ~15 further interaction sources whose terms are NonCommercial,
+# unclear, or absent; those are excluded from the committed snapshot. The full
+# per-source decision, licence text and URL live in evidence.SOURCE_LICENCES,
+# the manifest, and LICENSES.md. Do NOT claim the whole DGIdb dataset is
+# redistributable.
+DGIDB_INCLUDED_SOURCES = frozenset({
+    "CIViC", "ChEMBL", "GuideToPharmacology", "DoCM", "NCI", "FDA",
+})
+
 
 def osteosarcoma_mask(metadata) -> "pd.Series":  # noqa: F821 (pandas imported lazily)
     """

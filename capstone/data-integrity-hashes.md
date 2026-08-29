@@ -128,5 +128,61 @@ embedding is **not** reproducible from the public repository (needs `geneformer`
 and is **not** bytewise-commensurable with the Phase 1 embeddings. See
 `capstone/geneformer-bg003082-feasibility.md` §3.
 
-The committed DGIdb snapshot will be appended here, pinned to the commit that adds it, once
-that file exists. Not yet computed — do not invent placeholder hashes.
+### Added with the DGIdb evidence layer (`evidence.py`)
+
+Phase 2 drug–gene interaction **evidence retrieval** (not treatment prediction). SHA-256
+computed directly from the committed bytes (`hashlib.sha256`, 1 MiB chunks).
+
+**Upstream, pinned but NOT committed** — the unfiltered DGIdb release assets. `evidence.py`
+downloads these into temporary staging on `--refresh`, verifies the exact byte size and
+SHA-256 below, and refuses any mismatch. Release **`2026-06b`** of
+`https://github.com/dgidb/dgidb-data` (published 2026-06-23; release page
+`https://github.com/dgidb/dgidb-data/releases/tag/2026-06b`). Hashes independently confirmed
+against the GitHub release API `digest` field.
+
+```
+5a798ffdaddd775b8409fa22509d77d55c663ca84625808617a78b1fc75dcc9e  interactions.tsv  16,163,629 bytes   (upstream, not committed)
+e3cfcff1001fdad9e0079998e97934c6bc666ea54598b35c570d2c92829689e7  genes.tsv          4,248,825 bytes   (upstream, not committed)
+f7d465c153d8235a61b9ad43322c98b1f15ace9577e6dc0250e27f19ac463ff5  drugs.tsv          7,253,304 bytes   (upstream, not committed)
+```
+
+**Committed** — the licence-filtered offline snapshot and its provenance manifest, under
+`data/external/dgidb/` (`.gitattributes` now marks `data/external/** -text`, so both are
+stored byte-exact on every platform):
+
+```
+7a9d0bf7c208075aeb56dfa7af30041cec7b33bf91c90a8999914a4f25655a45  data/external/dgidb/dgidb_2026-06b.interactions.filtered.tsv  13,930,492 bytes
+e0578756a191717d9ee2f4b19d1dfe10e51180033ac819a12281749b602ddd05  data/external/dgidb/dgidb_2026-06b.manifest.json                  16,626 bytes
+```
+
+**`dgidb_2026-06b.interactions.filtered.tsv`** — 37,336 interaction records, 26 columns
+(schema in the manifest), one record per unique `record_key` (SHA-1 of the preceding
+fields). Contains records **only** from the six interaction sources whose redistribution
+terms are explicitly verified as compatible with committing them — **CIViC** (CC0 1.0),
+**ChEMBL** (CC BY-SA 3.0), **GuideToPharmacology** (CC BY-SA 4.0), **DoCM** (CC BY 4.0),
+**NCI** (US-Gov public domain), **FDA** (US-Gov public domain). DGIdb's other 15 interaction
+sources (NonCommercial, custom-restrictive, "unclear", or copyrighted supplementary tables —
+DTC, TTD, PharmGKB, OncoKB, COSMIC, CGI, CKB-CORE, CancerCommons, MyCancerGenome(+CT), TALC,
+TEND, TdgClinicalTrial, ClearityFoundation(CT+Biomarkers)) are **excluded**. Per-source
+licence text, URL, decision and reason are in the manifest and `LICENSES.md`. Gene identity
+is the canonical **Entrez ID** (DGIdb's HGNC-approved `gene_name` + single `hgnc:` concept
+id, joined to `gene_columns.json` by globally-unique symbol; 4,472 / 4,652 DGIdb genes
+resolved, the rest outside the frozen protein-coding space); the symbol is a consistency
+field only. Direction is normalised strictly from DGIdb's own
+`interactionClaimTypes.directionality` vocabulary into `inhibitory` (20,121) / `activating`
+(7,615) / `unknown` (9,600). `pmids` / `curation_type` / `indication` are absent from this
+DGIdb export and are always empty — never inferred. Rows are in a documented deterministic
+**evidence-display** order (not efficacy or clinical priority).
+
+The snapshot TSV **regenerates byte-identically** from the pinned assets:
+`py evidence.py --refresh` (or `--from-staging DIR`) reproduces
+`7a9d0bf7c208075aeb56dfa7af30041cec7b33bf91c90a8999914a4f25655a45` exactly. The manifest
+JSON is identical on regeneration **except** its `retrieval` block, which records the
+wall-clock `retrieved_utc`; its hash above is the committed bytes, not a reproducibility
+claim. `py evidence.py --validate` re-checks every invariant against the committed files
+with no network access.
+
+**Scope.** Evidence retrieval only — no model, no efficacy / clinical-relevance / approval /
+indication / osteosarcoma-relevance inference. **This is not a claim that the whole DGIdb
+dataset is redistributable; it is not.** Every returned display record carries: *"A recorded
+drug–gene interaction does not establish efficacy for this sample or for osteosarcoma."*
