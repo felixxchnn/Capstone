@@ -88,5 +88,45 @@ unaffected. Verified through the real consumer: `load_ensembl_map` →
 `entrez_mapped=18459, entrez_unmapped=1`; `build_frames` →
 `genes_mapped_to_ensembl=18459, genes_dropped_no_ensembl=1, ensembl_collisions_dropped=0`.
 
+### Added with the BG003082 Geneformer embedding (Kaggle GPU step)
+
+SHA-256 computed directly from the committed bytes (`hashlib.sha256`, 1 MiB chunks), not
+from memory. Both files were produced on Kaggle by `capstone/kaggle_bg003082_embedding.py`
+(Tesla T4; `geneformer` pinned to `04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5`) and committed
+to `data/processed/` **unmodified** — not regenerated, rounded, or normalised locally.
+
+```
+06a4ab9f85e5ac908975268ed502912317503ed277d28eeab1663d8305835080  data/processed/geneformer_bg003082_embedding.csv             18,822 bytes
+eb111660731b34e328bc4b07693c405070e24aad3a6866d25c71fb9294e1194c  data/processed/geneformer_bg003082_embedding.provenance.json   6,997 bytes
+```
+
+**`geneformer_bg003082_embedding.csv`** — the BG003082 CLS embedding: one data row
+`BG003082`, columns `0`–`767`, every value finite. Geneformer-V2-104M_CLcancer, 4,096
+context, `special_token=True`, CLS pooling from layer −1 — the same settings as the frozen
+1,140-row `geneformer_embeddings.csv`, but a **separate sidecar**. The frozen matrix is
+byte-unchanged (`af8ee6d734bea11101d07884f1c72d2b4efaff9875506738a037102a712f1e46`,
+verified before/after inside the provenance JSON and re-checked on disk). Token-id list
+SHA-256 `f5c33af88f48e9ceba50c0d1b1975dbe20108be6dc5836b9232fda2766b1c2ef` (token length
+4,096; starts `<cls>`, ends `<eos>`; every id in vocab; independent norm/rank replication of
+the top-50 tokens passed on Kaggle).
+
+**`geneformer_bg003082_embedding.provenance.json`** — environment (Python 3.12.13,
+`torch 2.10.0+cu128`, `transformers 4.49.0`, Tesla T4), the pinned and run-time-resolved
+Geneformer revision (both `04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5`), the input-build
+reconciliation, the tokenisation hard checks, and the frozen-matrix before/after hashes.
+Input hashes recorded there reconcile with the committed repo inputs:
+`BG003082.gene_tpm.gct.gz` `652011a1…`, `ensembl_map.csv` `c5c97ac0…`, `gene_columns.json`
+`a4b80690…`; mapping counts 18,460 canonical → 18,427 mapped + 33 unresolved (NOX5 /
+Entrez `79400` among them), 0 canonical-identifier collisions, no symbol fallback.
+
+**Caveats unchanged by this artifact existing.** The embedding is bulk primary-tumour TPM
+through a model trained on cultured cell lines (domain shift); the pseudo-count basis is
+linear TPM (feasibility doc §4); the Entrez→Ensembl map is NCBI `gene2ensembl`, not the
+`mygene` map that produced the training embeddings and is gone; the pinned Geneformer
+revision is a fresh pin for this run, **not** the unrecorded Phase 1 training revision. The
+embedding is **not** reproducible from the public repository (needs `geneformer` + a GPU)
+and is **not** bytewise-commensurable with the Phase 1 embeddings. See
+`capstone/geneformer-bg003082-feasibility.md` §3.
+
 The committed DGIdb snapshot will be appended here, pinned to the commit that adds it, once
 that file exists. Not yet computed — do not invent placeholder hashes.

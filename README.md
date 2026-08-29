@@ -147,8 +147,9 @@ Written to `data/processed/`:
 - `head_results.json` — Geneformer-head metrics (`train_head.py`)
 - `analysis_results.json` — bootstrap CI, paired comparison, effective df (`analysis.py`)
 - `ensembl_map.csv` — Phase 2. Entrez↔Ensembl cross-reference (NCBI `gene2ensembl`), 18,459/18,460 canonical genes (`NOX5` has no NCBI Ensembl xref). Consumed by `prepare_geneformer_input.py` and `sample_profile.py`.
+- `geneformer_bg003082_embedding.csv` / `.provenance.json` — Phase 2. The 1 × 768 Geneformer CLS embedding for the external `BG003082` tumor sample, from the Kaggle GPU run (`kaggle_bg003082_embedding.py`). A separate exploratory sidecar; the frozen `geneformer_embeddings.csv` is unchanged.
 
-16 files are tracked in `data/processed/`. `join_report.txt` is methods-section material. "We intersected three DepMap
+18 files are tracked in `data/processed/`. `join_report.txt` is methods-section material. "We intersected three DepMap
 tables, reconciled 18,463 genes across two matrices by Entrez ID, and retained
 4,297 selective dependencies" is real provenance, and it's already written for you.
 
@@ -264,10 +265,18 @@ the GCT v1.2 schema, reconciles its versioned Ensembl IDs to the frozen canonica
 by Ensembl-ID join, and reports every reconciliation count — is implemented and validated
 (`py sample_profile.py --self-test`). For `BG003082`: 18,427 of 18,460 canonical genes
 resolve, 33 are left as explicit `NaN` (never zero-filled), and there are no identifier
-collisions. Still to come: the Geneformer embedding for `BG003082`, the drug–gene evidence
-retrieval layer (`evidence.py`), the orchestration (`case_study.py`) with its no-leakage and
-ranking-direction assertions, and the offline HTML report (`report.py`). No Phase 1
-artifact, split, or committed result is touched by any of this.
+collisions. The `BG003082` Geneformer embedding also exists now: `kaggle_bg003082_embedding.py`
+ran on Kaggle (Tesla T4; `geneformer` pinned to commit `04c2b2e8…`) and produced the committed
+Phase 2 sidecar `data/processed/geneformer_bg003082_embedding.csv` (1 × 768) and its
+provenance JSON — a separate sidecar, not a row in the frozen `geneformer_embeddings.csv`
+(which is byte-unchanged). It is not reproducible from this repository (needs `geneformer` + a
+GPU) and is not commensurable with the Phase 1 embeddings — bulk-tumor input, an NCBI rather
+than the original `mygene` identifier map, and a freshly pinned rather than the unrecorded
+Phase 1 model revision; it stays `exploratory_external_prediction` with no measured outcome.
+Still to come: the drug–gene evidence retrieval layer (`evidence.py`), the orchestration
+(`case_study.py`) with its no-leakage and ranking-direction assertions, and the offline HTML
+report (`report.py`). No Phase 1 artifact, split, or committed result is touched by any of
+this.
 
 **Evidence boundaries.** Ranking a predicted CRISPR dependency and citing drug–gene
 interaction evidence for it is not a treatment-efficacy estimate, not a patient-response

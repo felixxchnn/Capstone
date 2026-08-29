@@ -208,11 +208,14 @@ Fourteen modules today; Phase 2 (§9.7) adds more. Ten have been read in full.
 | `run_geneformer_embeddings.py` | Embedding extraction; ran on Kaggle | no |
 | `inspect_data.py` | Ad-hoc inspection, three hard-coded raw filenames read via bare `pd.read_csv`, not `config.resolve_file`/`RAW_DIR`. Unrunnable from a clone (raw CSVs gitignored) even before that. Ship-or-cut undecided. | yes |
 
-**`data/processed`** holds 16 tracked files (the 15 Phase 1 artifacts plus
-`ensembl_map.csv`, added in `d78fbf8`). `data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz`
-is the one file under `data/external/` (also `d78fbf8`). `data/processed/predictions/` is
-gitignored — 12 files, ~12 MB, regenerable in ~3 minutes from `--save-predictions` on both
-modules.
+**`data/processed`** holds 18 tracked files: the 15 Phase 1 artifacts, plus `ensembl_map.csv`
+(added `d78fbf8`), plus the Phase 2 BG003082 Geneformer sidecar
+`geneformer_bg003082_embedding.csv` + `geneformer_bg003082_embedding.provenance.json` (added
+2026-08-29, Kaggle run). The sidecar is a `1 × 768` external-sample embedding, **not** part of
+the frozen `geneformer_embeddings.csv` (1,140 × 768), which is untouched.
+`data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz` is the one file under `data/external/`
+(also `d78fbf8`). `data/processed/predictions/` is gitignored — 12 files, ~12 MB, regenerable
+in ~3 minutes from `--save-predictions` on both modules.
 **PRISM (`prism_response`) is fully wired end to end in code — `config.py`'s three
 `prism_*` aliases, `build_dataset.load_prism`, both `run_task` functions' `task="prism"`
 branch, `checks.py` §7, `analysis.py --task prism` — but no raw PRISM file has ever been
@@ -372,10 +375,23 @@ loader — is implemented and validated** (`--self-test` green; real BG003082 lo
 canonical genes resolved via Ensembl-ID join, 33 left as explicit `NaN`, 0 identifier collisions,
 deterministic). It deliberately does **not** do the plan's step-4 symbol fallback (rescues only 4
 of the 33; would reintroduce cross-provenance mixing the `ensembl_map.csv` single-provenance
-decision rejected — see the module docstring). Still to build: the Geneformer embedding for
-BG003082, `evidence.py` (DGIdb), `case_study.py` (orchestration + no-leakage / ranking-direction
-assertions + osteosarcoma-aggregate stat), `report.py` (offline HTML), the committed DGIdb
-snapshot, and `checks.py` reconciliation/evidence sections.
+decision rejected — see the module docstring).
+
+**The BG003082 Geneformer embedding now exists.** `capstone/kaggle_bg003082_embedding.py` ran
+on Kaggle 2026-08-29 (Tesla T4; `geneformer` pinned to `04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5`)
+and produced the committed Phase 2 sidecar `data/processed/geneformer_bg003082_embedding.csv`
+(`1 × 768`, SHA-256 `06a4ab9f85e5ac908975268ed502912317503ed277d28eeab1663d8305835080`) plus
+`…embedding.provenance.json`. Tokenisation hard checks all passed (token length 4,096, in-vocab,
+top-50 norm/rank replication). Frozen `geneformer_embeddings.csv` byte-unchanged (`af8ee6d7…`
+before == after). Hashes in `capstone/data-integrity-hashes.md`. This is a **separate sidecar**,
+not a row in the frozen matrix, and it changes no scientific claim: BG003082 stays
+`exploratory_external_prediction` / `outcome_status = unavailable`, non-commensurable with the
+Phase 1 embeddings (bulk-tumour input, NCBI-not-`mygene` map, fresh revision pin) — see
+`capstone/geneformer-bg003082-feasibility.md` §3–§5.
+
+Still to build: `evidence.py` (DGIdb), `case_study.py` (orchestration + no-leakage /
+ranking-direction assertions + osteosarcoma-aggregate stat), `report.py` (offline HTML), the
+committed DGIdb snapshot, and `checks.py` reconciliation/evidence sections.
 
 ---
 

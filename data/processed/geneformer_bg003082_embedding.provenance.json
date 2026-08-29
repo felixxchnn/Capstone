@@ -1,0 +1,159 @@
+{
+  "sample_id": "BG003082",
+  "produced_by": "capstone/kaggle_bg003082_embedding.py",
+  "environment": {
+    "python": "3.12.13 (main, Mar  4 2026, 09:23:07) [GCC 11.4.0]",
+    "platform": "Linux-6.12.90+-x86_64-with-glibc2.35",
+    "packages": {
+      "numpy": "2.5.2",
+      "pandas": "2.3.3",
+      "torch": "2.10.0+cu128",
+      "transformers": "4.49.0",
+      "anndata": "0.13.3.post0",
+      "scanpy": "1.12.4",
+      "geneformer": "unknown",
+      "huggingface_hub": "0.36.2",
+      "datasets": "5.0.0",
+      "scipy": "1.16.3"
+    },
+    "gpu": "Tesla T4",
+    "geneformer_revision_pinned": "04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5",
+    "geneformer_revision_resolved": "04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5",
+    "model_repo": "ctheodoris/Geneformer",
+    "model_subdir": "Geneformer-V2-104M_CLcancer",
+    "model_input_size": 4096,
+    "special_token": true,
+    "model_version": "V2",
+    "target_sum": 10000,
+    "emb_mode": "cls",
+    "emb_layer": -1,
+    "dictionaries_repaired": [
+      "ensembl_mapping_dict_gc104M.pkl",
+      "gene_median_dictionary_gc104M.pkl",
+      "token_dictionary_gc104M.pkl",
+      "gene_name_id_dict_gc104M.pkl",
+      "gene_dictionaries_30m/gene_name_id_dict_gc30M.pkl",
+      "gene_dictionaries_30m/token_dictionary_gc30M.pkl",
+      "gene_dictionaries_30m/ensembl_mapping_dict_gc30M.pkl",
+      "gene_dictionaries_30m/gene_median_dictionary_gc30M.pkl"
+    ],
+    "tokenizer_iloc_occurrences": 4
+  },
+  "input_build": {
+    "sample_id": "BG003082",
+    "builder": "geneformer_sample_input.build_bg003082_input",
+    "inputs": {
+      "gct_file": {
+        "name": "BG003082.gene_tpm.gct.gz",
+        "sha256": "652011a1cdb8ecf42812cc5fcd6c55947a77995ebe47893e3b307165467bb711",
+        "bytes": 778119
+      },
+      "ensembl_map_file": {
+        "name": "ensembl_map.csv",
+        "sha256": "c5c97ac03dd6bb4e4b9b1becea9c944e5e2742d4bc90af435ec3ddf6d66c1324",
+        "bytes": 422382,
+        "provenance": "NCBI gene2ensembl (see capstone/data-integrity-hashes.md)"
+      },
+      "gene_columns_file": {
+        "name": "gene_columns.json",
+        "sha256": "a4b8069cc93af48f01e745bb1a15f4eaf4a7b67c9f92ca44bef3bb9e44c6d0a1"
+      }
+    },
+    "sample_profile_reconciliation": {
+      "external_rows": 74628,
+      "unexpected_identifiers": 0,
+      "unexpected_identifier_examples": [],
+      "versioned_ids_stripped": 74628,
+      "bare_ensembl_ids": 0,
+      "duplicate_external_ids": 0,
+      "duplicate_external_id_examples": [],
+      "external_rows_after_collapse": 74628,
+      "resolved_via_ensembl_map": 18427,
+      "unresolved_external_rows": 56201,
+      "resolved_outside_canonical": 0,
+      "resolved_outside_canonical_examples": [],
+      "canonical_id_collisions": 0,
+      "canonical_id_collision_examples": [],
+      "canonical_genes": 18460,
+      "canonical_genes_mapped": 18427,
+      "canonical_genes_missing": 33,
+      "canonical_genes_measured_zero": 1407,
+      "canonical_genes_measured_nonzero": 17020,
+      "symbol_fallback": "not attempted (see module docstring)",
+      "symbol_fallback_candidates": [
+        "ASPRV1",
+        "FAM174C",
+        "NOX5",
+        "PAXX"
+      ]
+    },
+    "frame_report": {
+      "sample_id": "BG003082",
+      "canonical_inputs": 18460,
+      "mapped_values": 18427,
+      "unresolved_values": 33,
+      "genes_without_ensembl_id_in_map": 1,
+      "genes_without_ensembl_id_examples": [
+        "79400"
+      ],
+      "extra_drops_beyond_sample_profile": 0,
+      "x_shape": [
+        1,
+        18427
+      ],
+      "x_has_nan": false,
+      "x_has_inf": false,
+      "x_has_negative": false,
+      "ensembl_ids_unique": true,
+      "ensembl_ids_well_formed": true,
+      "n_counts": 972338.580139,
+      "n_counts_equals_retained_row_sum": true,
+      "symbol_fallback_used": false,
+      "pseudocount_disclosure": "linear TPM used directly as the Geneformer pseudo-count row. Geneformer expects raw counts; this is an approximation. It is the SAME approximation the frozen 1,140 training embeddings used (log2(TPM+1) -> 2**x - 1 round-trips to linear TPM), so it is consistency-preserving, not a shortcut. Real RSEM expected_count was available for BG003082 and deliberately not used, for provenance consistency with the training set.",
+      "geneformer_emb_dim_expected": 768
+    },
+    "n_counts": 972338.580139,
+    "x_shape": [
+      1,
+      18427
+    ],
+    "pseudocount_disclosure": "linear TPM used directly as the Geneformer pseudo-count row. Geneformer expects raw counts; this is an approximation. It is the SAME approximation the frozen 1,140 training embeddings used (log2(TPM+1) -> 2**x - 1 round-trips to linear TPM), so it is consistency-preserving, not a shortcut. Real RSEM expected_count was available for BG003082 and deliberately not used, for provenance consistency with the training set.",
+    "not_produced_here": "tokenisation and the 1x768 CLS embedding require Geneformer + a GPU and are NOT produced by this module. Run capstone/kaggle_bg003082_embedding.py on Kaggle/Colab. Until then the repository is in the documented baseline-only fallback state (see capstone/geneformer-bg003082-feasibility.md)."
+  },
+  "tokenisation_checks": {
+    "n_tokenised_cells": 1,
+    "model_id": "BG003082",
+    "token_length": 4096,
+    "length_within_limit": true,
+    "starts_with_cls": true,
+    "ends_with_eos": true,
+    "all_tokens_in_vocab": true,
+    "n_tokens_out_of_vocab": 0,
+    "token_id_sha256": "f5c33af88f48e9ceba50c0d1b1975dbe20108be6dc5836b9232fda2766b1c2ef",
+    "token_dictionary_path": "token_dictionary_gc104M.pkl",
+    "independent_norm_top50_matches": true,
+    "independent_norm_n_compared": 50,
+    "all_hard_checks_passed": true
+  },
+  "embedding": {
+    "shape": [
+      1,
+      768
+    ],
+    "all_finite": true,
+    "l2_norm": 7.742829376625113,
+    "sidecar_csv": "geneformer_bg003082_embedding.csv",
+    "sidecar_csv_sha256": "06a4ab9f85e5ac908975268ed502912317503ed277d28eeab1663d8305835080"
+  },
+  "frozen_matrix_untouched": {
+    "file": "geneformer_embeddings.csv",
+    "sha256_before": "af8ee6d734bea11101d07884f1c72d2b4efaff9875506738a037102a712f1e46",
+    "sha256_after": "af8ee6d734bea11101d07884f1c72d2b4efaff9875506738a037102a712f1e46"
+  },
+  "disclosures": [
+    "Bulk primary-tumour TPM, not raw-count scRNA-seq: schema-compatible but scientifically out of distribution for a model trained on cultured DepMap cell lines.",
+    "Pseudo-count basis is linear TPM, identical to the frozen 1,140 training embeddings (log2(TPM+1) -> 2**x - 1 round-trips to TPM). Real RSEM counts were available and deliberately not used.",
+    "Entrez->Ensembl map is NCBI gene2ensembl; the training embeddings used a mygene map that no longer exists in the repo. Provenance differs even though the join key (Entrez) is the same.",
+    "This embedding is NOT reproducible from the public repository (needs Geneformer + a GPU). Same reproducibility asymmetry as the Phase 1 Geneformer arm, plus the map-provenance difference above."
+  ]
+}

@@ -5,12 +5,27 @@ loader). This document is written from executed code, not from memory: every cou
 was produced by running `py sample_profile.py --json` and
 `py geneformer_sample_input.py --self-test` on the committed bytes on this machine.
 
+**Update 2026-08-29 (later the same day):** the Kaggle GPU step has now run. Tokenisation and
+a `1 × 768` CLS embedding for BG003082 exist and are committed as a Phase 2 **sidecar** —
+`data/processed/geneformer_bg003082_embedding.csv` (SHA-256
+`06a4ab9f85e5ac908975268ed502912317503ed277d28eeab1663d8305835080`) and
+`…embedding.provenance.json`. The frozen 1,140-row `geneformer_embeddings.csv` is
+byte-unchanged (`af8ee6d7…`, verified before/after). **This does not upgrade any scientific
+claim.** Every caveat in §3 and §4 stands: bulk primary-tumour TPM against a cell-line-trained
+model, linear-TPM pseudo-counts, NCBI-not-`mygene` identifier map, a fresh (not Phase 1)
+revision pin, not reproducible from the public repo, and not bytewise-commensurable with the
+Phase 1 embeddings. BG003082 remains `exploratory_external_prediction`,
+`outcome_status = unavailable`. Details in §5; the pre-run wording below is kept for the
+record with this update layered on top.
+
 Companion code added in the same change:
 
 - `geneformer_sample_input.py` — deterministic repo-local builder that turns the committed
   GCT + `ensembl_map.csv` into validated Geneformer-input frames (`X`, `var`, `obs`). No
   tokenisation, no GPU, no network. `--self-test` is green.
-- `capstone/kaggle_bg003082_embedding.py` — the GPU half. Executable, **not yet run**.
+- `capstone/kaggle_bg003082_embedding.py` — the GPU half. **Run on Kaggle 2026-08-29**
+  (Tesla T4; `geneformer` pinned to `04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5`); produced the
+  committed sidecar above.
 - One-line docstring fix in `run_geneformer_embeddings.py` (512 → 768 for Geneformer V2 104M).
 
 ---
@@ -21,13 +36,15 @@ Companion code added in the same change:
 |---|---|
 | Can the committed BG003082 GCT + `ensembl_map.csv` produce a **schema-valid** Geneformer input? | **Yes.** Built and validated locally: `X` is `1 × 18,427`, no NaN/inf/negative, unique well-formed Ensembl IDs, `obs.n_counts` = exact retained-row sum (972,338.58), `var` carries an `ensembl_id` column. |
 | Is that input **scientifically in-distribution**? | **No.** It is bulk primary-tumour TPM. Every training example was a cultured DepMap cell line, tokenised from reconstructed pseudo-counts. BG003082 mixes tumour, stromal, and immune transcriptional signal in proportions no cell line has. The input is *format-compatible*, not *distribution-compatible*. |
-| Does a BG003082 **embedding** exist? | **No.** None exists unless `capstone/kaggle_bg003082_embedding.py` is actually run on Kaggle/Colab and produces the sidecar files. It has not been run. |
-| Can the public repo **reproduce** the embedding? | **No.** It needs the `geneformer` package, the model's LFS `.pkl` dictionaries, and a GPU — none present here. Same reproducibility asymmetry the Phase 1 Geneformer arm already carries (CLAUDE.md §11), plus the map-provenance gap in §3. |
+| Does a BG003082 **embedding** exist? | **Yes, as of 2026-08-29.** `capstone/kaggle_bg003082_embedding.py` ran on Kaggle (Tesla T4) and produced the committed sidecar `data/processed/geneformer_bg003082_embedding.csv` (`1 × 768`, one row `BG003082`, columns `0`–`767`, all finite) plus its provenance JSON. All tokenisation hard checks passed: token length 4,096, `<cls>`…`<eos>`, every id in vocab, `ModelID` survived, independent norm/rank replication of the top-50 tokens matched. Token-id SHA-256 `f5c33af88f48e9ceba50c0d1b1975dbe20108be6dc5836b9232fda2766b1c2ef`. It is a **separate sidecar**, not a row in the frozen matrix. |
+| Can the public repo **reproduce** the embedding? | **No.** It needs the `geneformer` package, the model's LFS `.pkl` dictionaries, and a GPU — none present here. The sidecar ships as a data artifact, refittable/rescorable but not regenerable offline. Same reproducibility asymmetry the Phase 1 Geneformer arm already carries (CLAUDE.md §11), plus the map-provenance gap in §3. |
+| Is the BG003082 embedding **commensurable** with the Phase 1 embeddings? | **No.** Different Entrez→Ensembl map provenance (§3), an unrecorded vs. a freshly-pinned Geneformer revision (§3), and bulk-tumour vs. cell-line input (row 2). Usable for the exploratory BG003082 demo arm; not to be placed at face value beside the Phase 1 per-target numbers. |
 
-Nothing here touches a Phase 1 invariant, split, or committed artifact. `git status` after all
-of the above shows only `run_geneformer_embeddings.py` (M) and two new files; the three
-results JSONs and `geneformer_embeddings.csv` are byte-unchanged, asserted inside the
-builder's self-test (`_frozen_hashes()` before/after).
+Nothing here touches a Phase 1 invariant, split, or committed artifact. The frozen
+`geneformer_embeddings.csv` and the three results JSONs are byte-unchanged — asserted inside
+the builder's self-test (`_frozen_hashes()` before/after) and re-checked against the
+before/after SHA-256 pair recorded in `geneformer_bg003082_embedding.provenance.json`
+(`af8ee6d7…` == `af8ee6d7…`).
 
 ---
 
@@ -133,10 +150,12 @@ load-bearing; it is recorded for provenance and because the tokeniser reads it.
 
 ---
 
-## 5. What the Kaggle script does (and has not yet done)
+## 5. What the Kaggle script did
 
-`capstone/kaggle_bg003082_embedding.py` is executable, not prose. When run on Kaggle/Colab
-it:
+`capstone/kaggle_bg003082_embedding.py` is executable, not prose. It **ran on Kaggle on
+2026-08-29** (Python 3.12.13, `torch 2.10.0+cu128`, `transformers 4.49.0`, Tesla T4;
+`geneformer` pinned to `04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5`, pinned == resolved). The
+numbered steps below describe what it does; all of them executed and passed on that run. It:
 
 1. records `sys.version`, platform, and versions of `numpy/pandas/torch/transformers/
    anndata/scanpy/geneformer/huggingface_hub/datasets/scipy`, plus the GPU name;
@@ -166,19 +185,37 @@ it:
    `…embedding.provenance.json` — with an explicit guard that the output path is not
    `geneformer_embeddings.csv`, and a before/after SHA-256 check that the frozen matrix is
    untouched;
-9. prints the sidecar SHA-256 and provenance block, ready to append to
-   `capstone/data-integrity-hashes.md` pinned to the commit that adds the sidecar.
+9. prints the sidecar SHA-256 and provenance block, appended to
+   `capstone/data-integrity-hashes.md`.
 
-**It has not been run.** No claim of a working BG003082 tokenisation or embedding may be made
-in this repository until it has been, and the sidecar files exist.
+**Outcome of the 2026-08-29 run.** `geneformer_bg003082_embedding.csv` — `1 × 768`, row
+`BG003082`, columns `0`–`767`, all finite, L2 norm 7.7428; SHA-256
+`06a4ab9f85e5ac908975268ed502912317503ed277d28eeab1663d8305835080`. Token-id list SHA-256
+`f5c33af88f48e9ceba50c0d1b1975dbe20108be6dc5836b9232fda2766b1c2ef`, token length 4,096,
+`n_tokens_out_of_vocab == 0`, `independent_norm_top50_matches == true`,
+`all_hard_checks_passed == true`. Input reconciliation in the provenance JSON matches the
+committed repo bytes: GCT `652011a1…`, `ensembl_map.csv` `c5c97ac0…`, `gene_columns.json`
+`a4b80690…`; 18,460 canonical → 18,427 mapped + 33 unresolved, 0 collisions, no symbol
+fallback. Frozen matrix `geneformer_embeddings.csv` before == after (`af8ee6d7…`). Hashes
+recorded in `capstone/data-integrity-hashes.md`.
+
+The embedding's existence is a **format/pipeline** result, not a scientific one: it does not
+make BG003082 in-distribution, does not make it reproducible from the public repo, and does
+not make it commensurable with the Phase 1 embeddings. See §3, §4, and the scope note in the
+header.
 
 ---
 
-## 6. Baseline-only fallback (the current repository state)
+## 6. Baseline-only fallback (no longer the repository state, kept for the record)
 
-If no embedding is generated, the repository stays exactly as it is now:
-`geneformer_sample_input` produces a validated input, and the BG003082 demo arm runs
-**baseline-only**.
+This section described the state **before** the 2026-08-29 Kaggle run, when no BG003082
+embedding existed. It no longer applies — the sidecar embedding now exists (§5) — but the
+analysis is retained because the fallback is still the correct behaviour if the sidecar is
+ever removed or found untrustworthy, and because it delimits exactly which claims the
+embedding does and does not unlock.
+
+In the fallback, `geneformer_sample_input` produces a validated input and the BG003082 demo
+arm runs **baseline-only**.
 
 Concrete path: `sample_profile.load_external_sample(log2_transform=True)` → canonical
 `log2(TPM+1)` row → `baseline.impute_with_train_mean` for the 33 unresolved genes → the
@@ -196,15 +233,21 @@ most-negative-first) → DGIdb evidence retrieval.
   in the frozen 1,140-row matrix.
 - The 5-line osteosarcoma-aggregate statistic (computed from saved predictions, no refit).
 
-### Claims that do NOT survive the fallback
+### Claims that would NOT survive the fallback (and are now available, but only as exploratory)
 
-- Any **Geneformer-vs-baseline** contrast **on BG003082**.
-- Any statement about the pretrained transformer's behaviour on bulk-tumour input.
+- A **Geneformer-vs-baseline** contrast **on BG003082**. Now runnable from the committed
+  sidecar, but strictly `exploratory_external_prediction`: bulk-tumour input, non-commensurable
+  with Phase 1 (§3), `outcome_status = unavailable` (no CRISPR screen for this tissue). It is
+  a workflow demonstration, not a measurement of the transformer's accuracy on BG003082.
+- Any statement about the pretrained transformer's behaviour on bulk-tumour input **as a
+  quantified finding**. The sidecar lets the demo *show* the transformer's ranked output on
+  BG003082; it does not license a performance claim, because there is nothing to score it
+  against.
 
-The fallback costs nothing in scientific integrity: Geneformer was already Phase 1's negative
-result, and BG003082 is scoped as `exploratory_external_prediction` with
-`outcome_status = unavailable`. Shipping baseline-only for BG003082, with "Geneformer
-embedding unavailable for this sample" stated as a limitation, is a legitimate final state.
+With the sidecar present, the BG003082 demo arm can display both the baseline and the
+Geneformer ranked outputs side by side, each labelled exploratory. If the sidecar is removed,
+the repository falls back to the baseline-only path above with "Geneformer embedding not
+generated for this sample" as the limitation — still a legitimate final state.
 
 ---
 
