@@ -40,10 +40,19 @@ Morrissey D, Cotto K, Griffith M, Griffith OL, Wagner AH. *DGIdb 5.0: rebuilding
 drug–gene interaction database for precision medicine and drug discovery platforms.*
 Nucleic Acids Research (2024). https://dgidb.org
 
-Upstream release **`2026-06b`** of `https://github.com/dgidb/dgidb-data` (DGIdb service
-`v.5.0.12`; TSV export tagged "Data version: Dec-2023 / DGIdb version: v.5.0.11"). The
-pinned assets `interactions.tsv`, `genes.tsv`, `drugs.tsv` are downloaded, hash-verified,
-and used only to build the committed snapshot; **they are never committed to this repo**.
+Upstream release **`2026-06b`** of `https://github.com/dgidb/dgidb-data` (DGIdb application
+`v.5.0.11` per the TSV comment / `v.5.0.12` per GraphQL; the packaged interaction **data**
+version is `Dec-2023` — the records are *not* June-2026 data). The pinned inputs
+`interactions.tsv`, `genes.tsv`, `drugs.tsv`, the HGNC monthly complete set
+(`hgnc_complete_set_2026-06-02.txt`), and the DGIdb `2026-06b` SQL dump
+(`dgidb_2026_06b.sql.gz`) are downloaded, hash-verified, and used only to build the
+committed snapshot; **none of them is committed to this repo**. The SQL dump is a
+*temporary* input used solely to recover claim-level publication (PMID) links.
+
+**HGNC** (HUGO Gene Nomenclature Committee), `hgnc_complete_set_2026-06-02.txt` from the
+genenames.org immutable monthly archive. genenames.org states **no restrictions are placed
+on the use of HGNC data** (https://www.genenames.org/about/license/). Used here only as an
+`HGNC ID → Entrez ID` crosswalk for gene identity; no HGNC content is committed.
 
 DGIdb aggregates ~21 interaction sources under **their own separate licences**. DGIdb's
 software licence does **not** grant redistribution rights over every aggregated source.
@@ -66,12 +75,19 @@ Included interaction sources and their licences (attribution required):
 | **NCI** | 14-September-2017 | Public domain — [NCI copyright/reuse](https://www.cancer.gov/policies/copyright-reuse) | U.S. National Cancer Institute |
 | **FDA** | 08-June-2026 | Public domain — [FDA website policy](https://www.fda.gov/about-fda/about-website/website-policies) | U.S. Food and Drug Administration |
 
+**Individual records remain subject to their own source-specific terms.** Every row of the
+committed snapshot names its originating source and that source's licence
+(`interaction_source`, `source_license`, `source_license_url`); those terms continue to
+govern each record. Any compilation-level licence below is **additive** and does **not**
+override or relax a source's own terms — a reuser must honour the specific source licence of
+each record they use.
+
 **ShareAlike.** Records derived from ChEMBL and Guide to PHARMACOLOGY are redistributed
-under CC BY-SA 3.0 and CC BY-SA 4.0 respectively. The committed snapshot as a compilation is
-made available under **CC BY-SA 4.0** (the most restrictive applicable ShareAlike term) to
-satisfy copyleft; each record additionally names its own `source_license` /
-`source_license_url`. CC0, CC BY 4.0 and public-domain records are compatible with inclusion
-in a CC BY-SA 4.0 compilation.
+under CC BY-SA 3.0 and CC BY-SA 4.0 respectively. As a convenience, the committed snapshot
+*as a compilation* is offered under **CC BY-SA 4.0** (the most restrictive applicable
+ShareAlike term) to satisfy copyleft; this is in addition to, not instead of, the per-record
+terms above. CC0, CC BY 4.0 and public-domain records are compatible with inclusion in a
+CC BY-SA 4.0 compilation.
 
 Excluded interaction sources (records **not** committed): DTC, TTD, PharmGKB, OncoKB, COSMIC,
 CGI, CKB-CORE, CancerCommons, MyCancerGenome, MyCancerGenomeClinicalTrial, TALC, TEND,

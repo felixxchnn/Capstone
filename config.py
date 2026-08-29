@@ -464,6 +464,60 @@ DGIDB_INCLUDED_SOURCES = frozenset({
     "CIViC", "ChEMBL", "GuideToPharmacology", "DoCM", "NCI", "FDA",
 })
 
+# --- Provenance: three distinct versions, do NOT conflate them ---
+# The release *packages* interaction content dated "Dec-2023"; it is NOT
+# June-2026 data. `evidence.py` records all three and never labels the
+# interaction records as June 2026.
+DGIDB_INTERACTION_DATA_VERSION = "Dec-2023"      # TSV/SQL "# Data version:"
+DGIDB_APP_VERSION_TSV_COMMENT = "v.5.0.11"       # TSV "# DGIdb version:"
+DGIDB_APP_VERSION_GRAPHQL = "v.5.0.12"           # GraphQL serviceInfo at retrieval
+
+# Fixed retrieval provenance -- a build input, NOT a wall-clock value. Every
+# committed artifact must be byte-identical across rebuilds, so nothing in a
+# tracked output may contain datetime.now(). Bump this only on a real re-pull of
+# the pinned assets. Volatile per-run execution times go to DGIDB_RUNLOG_FILE
+# (untracked).
+DGIDB_RETRIEVED_UTC = "2026-08-29T00:00:00Z"
+DGIDB_RUNLOG_FILE = DGIDB_DIR / "build_runlog.jsonl"   # gitignored
+
+# HGNC ID -> Entrez ID crosswalk. Pinned immutable monthly archive; the gene
+# identity join is `DGIdb hgnc:<id>` -> HGNC ID -> Entrez ID. Symbols are used
+# only as a consistency check, never as the identity join.
+DGIDB_HGNC_ASSET: dict[str, object] = {
+    "name": "hgnc_complete_set_2026-06-02.txt",
+    "url": (
+        "https://storage.googleapis.com/public-download-files/hgnc/archive/"
+        "archive/monthly/tsv/hgnc_complete_set_2026-06-02.txt"
+    ),
+    "version": "HGNC monthly release 2026-06-02",
+    "retrieved": "2026-08-29",
+    "bytes": 16_738_373,
+    "sha256":
+        "1f8826fb0b519296233dba3f987bc38efcfb3706032ed0c0685a6936f9b11e93",
+    "provenance": (
+        "genenames.org immutable monthly archive; aligns with DGIdb 2026-06b's "
+        "HGNC source version 20260619 (2026-06-19). HGNC IDs are stable, so "
+        "month-level alignment is sufficient for an ID->ID crosswalk."
+    ),
+    "license": "genenames.org: no restrictions on use of HGNC data",
+    "license_url": "https://www.genenames.org/about/license/",
+}
+
+# Release-aligned DGIdb SQL dump. Used ONLY as a temporary build input to
+# recover claim-level publication (PMID) links -- it is NOT committed. PMIDs are
+# NEVER parsed from free text.
+DGIDB_SQL_ASSET: dict[str, object] = {
+    "name": "dgidb_2026_06b.sql.gz",
+    "url": (
+        "https://github.com/dgidb/dgidb-data/releases/download/2026-06b/"
+        "dgidb_2026_06b.sql.gz"
+    ),
+    "bytes": 84_060_850,
+    "sha256":
+        "1d1fae3fa9e4b42a8959ef0a84b7b339a236a59403935dcb7e0f2dba20084435",
+    "role": "temporary build input -- NOT committed",
+}
+
 
 def osteosarcoma_mask(metadata) -> "pd.Series":  # noqa: F821 (pandas imported lazily)
     """

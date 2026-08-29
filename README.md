@@ -122,7 +122,7 @@ independently of the code that built the file.
 | `make_fixture.py` | Synthetic data mirroring the real formats. |
 | `sample_profile.py` | Phase 2. Loads an external RNA-seq GCT (currently `BG003082`) into the frozen canonical gene space via Ensembl-ID join, with full reconciliation provenance. |
 | `geneformer_sample_input.py` | Phase 2. Builds validated Geneformer-input frames for `BG003082` from the committed GCT + `ensembl_map.csv` (no GPU/network); the Kaggle GPU half produced the committed `geneformer_bg003082_embedding.csv` sidecar. |
-| `evidence.py` | Phase 2. Offline, licence-filtered DGIdb drug–gene interaction **evidence retrieval** (no model, no efficacy inference). `load_snapshot()` / `get_evidence_for_gene()` read a committed snapshot; `--refresh` rebuilds it from the pinned DGIdb `2026-06b` release. |
+| `evidence.py` | Phase 2. Offline, licence-filtered DGIdb drug–gene interaction **evidence retrieval** (no model, no efficacy inference). `load_snapshot()` / `get_evidence_for_gene()` read a committed, deterministic snapshot; `--refresh` / `--from-staging` rebuild it byte-identically from 5 pinned inputs (DGIdb `2026-06b` TSVs + HGNC `2026-06-02` + the DGIdb SQL dump). Gene identity is an HGNC-ID→Entrez join; `pmids` come from the SQL dump by identifier join, never free text. |
 
 `prepare_geneformer_input.py` and `run_geneformer_embeddings.py` produced
 `data/processed/geneformer_embeddings.csv`, but ran on Kaggle and are not
@@ -158,7 +158,7 @@ tables, reconciled 18,463 genes across two matrices by Entrez ID, and retained
 Under `data/external/` (committed, non-DepMap):
 
 - `sid_osteosarc/BG003082.gene_tpm.gct.gz` — Phase 2. The external osteosarcoma tumor RNA-seq sample (CC0 1.0).
-- `dgidb/dgidb_2026-06b.interactions.filtered.tsv` / `dgidb_2026-06b.manifest.json` — Phase 2. Licence-filtered offline snapshot of DGIdb release `2026-06b` (37,336 interaction records from 6 redistribution-verified sources) + its provenance manifest, built by `evidence.py`. The unfiltered upstream DGIdb TSVs are pinned by hash but never committed.
+- `dgidb/dgidb_2026-06b.interactions.filtered.tsv` / `dgidb_2026-06b.manifest.json` — Phase 2. Licence-filtered, deterministic offline snapshot of DGIdb release `2026-06b` (37,343 interaction records from 6 redistribution-verified sources, `pmids` from the SQL dump) + its provenance manifest, built by `evidence.py`. The 5 pinned build inputs (DGIdb TSVs, HGNC complete set, DGIdb SQL dump) are hash-verified but never committed; `build_runlog.jsonl` is git-ignored.
 
 ---
 
@@ -280,20 +280,25 @@ provenance JSON — a separate sidecar, not a row in the frozen `geneformer_embe
 GPU) and is not commensurable with the Phase 1 embeddings — bulk-tumor input, an NCBI rather
 than the original `mygene` identifier map, and a freshly pinned rather than the unrecorded
 Phase 1 model revision; it stays `exploratory_external_prediction` with no measured outcome.
-The drug–gene evidence layer (`evidence.py`) also exists now: a committed, licence-filtered
-offline snapshot of DGIdb release `2026-06b`
-(`data/external/dgidb/dgidb_2026-06b.interactions.filtered.tsv`, 37,336 interaction records
-+ a provenance manifest). It contains records **only** from the six DGIdb interaction
-sources whose redistribution terms are explicitly verified as compatible with committing
-them (CIViC, ChEMBL, Guide to PHARMACOLOGY, DoCM, NCI, FDA — CC0 / CC-BY / CC-BY-SA /
-US-government public domain); DGIdb's other 15 interaction sources are excluded, with the
-per-source licence decision recorded. It is **evidence retrieval, not treatment
-prediction** — no model, and no inference of efficacy, approval, indication, or osteosarcoma
-relevance; every returned record carries a fixed disclaimer to that effect. The unfiltered
-upstream DGIdb TSVs are pinned by hash but never committed. Still to come: the orchestration
-(`case_study.py`) with its no-leakage and ranking-direction assertions, and the offline HTML
-report (`report.py`). No Phase 1 artifact, split, or committed result is touched by any of
-this.
+The drug–gene evidence layer (`evidence.py`) also exists now: a committed, licence-filtered,
+**deterministic** offline snapshot of DGIdb release `2026-06b`
+(`data/external/dgidb/dgidb_2026-06b.interactions.filtered.tsv`, 37,343 interaction records
++ a provenance manifest; both regenerate byte-identically). It contains records **only**
+from the six DGIdb interaction sources whose redistribution terms are explicitly verified as
+compatible with committing them (CIViC, ChEMBL, Guide to PHARMACOLOGY, DoCM, NCI, FDA —
+CC0 / CC-BY / CC-BY-SA / US-government public domain); DGIdb's other 15 interaction sources
+are excluded, with the per-source licence decision recorded, and each retained record still
+names its own source licence. Gene identity is an **identifier join** (`hgnc:<n>` → HGNC ID
+→ Entrez, via a pinned HGNC monthly release; ambiguous mappings hard-fail), with symbols
+kept only as a consistency check. Publication PMIDs are recovered from the release-aligned
+DGIdb SQL dump by identifier join (never parsed from free text; coverage is source-skewed
+and disclosed). It is **evidence retrieval, not treatment prediction** — no model, and no
+inference of efficacy, approval, indication, interaction direction beyond DGIdb's own
+vocabulary, or osteosarcoma relevance; every returned record carries a fixed disclaimer to
+that effect. The 5 pinned build inputs (DGIdb TSVs, HGNC complete set, DGIdb SQL dump) are
+hash-verified but never committed. Still to come: the orchestration (`case_study.py`) with
+its no-leakage and ranking-direction assertions, and the offline HTML report (`report.py`).
+No Phase 1 artifact, split, or committed result is touched by any of this.
 
 **Evidence boundaries.** Ranking a predicted CRISPR dependency and citing drug–gene
 interaction evidence for it is not a treatment-efficacy estimate, not a patient-response

@@ -133,56 +133,88 @@ and is **not** bytewise-commensurable with the Phase 1 embeddings. See
 Phase 2 drug–gene interaction **evidence retrieval** (not treatment prediction). SHA-256
 computed directly from the committed bytes (`hashlib.sha256`, 1 MiB chunks).
 
-**Upstream, pinned but NOT committed** — the unfiltered DGIdb release assets. `evidence.py`
-downloads these into temporary staging on `--refresh`, verifies the exact byte size and
-SHA-256 below, and refuses any mismatch. Release **`2026-06b`** of
-`https://github.com/dgidb/dgidb-data` (published 2026-06-23; release page
-`https://github.com/dgidb/dgidb-data/releases/tag/2026-06b`). Hashes independently confirmed
-against the GitHub release API `digest` field.
+**Version provenance — three distinct things, do not conflate:** release **tag `2026-06b`**
+(published 2026-06-23); **interaction *data* version `Dec-2023`** (the `# Data version:`
+comment in every TSV); **DGIdb application `v.5.0.11`** (TSV `# DGIdb version:` comment) /
+**`v.5.0.12`** (GraphQL `serviceInfo` at retrieval). The committed interaction records are
+**not** June-2026 data; source-level versions range 2011–2026.
+
+**Upstream / build inputs, pinned but NOT committed.** `evidence.py` downloads these into
+temporary staging on `--refresh`, verifies the exact byte size and SHA-256, and refuses any
+mismatch. The three DGIdb release TSVs are from release **`2026-06b`** of
+`https://github.com/dgidb/dgidb-data` (hashes independently confirmed against the GitHub
+release API `digest` field). The HGNC monthly complete set is the gene-identity crosswalk;
+the SQL dump is a **temporary** publication-recovery input.
 
 ```
-5a798ffdaddd775b8409fa22509d77d55c663ca84625808617a78b1fc75dcc9e  interactions.tsv  16,163,629 bytes   (upstream, not committed)
-e3cfcff1001fdad9e0079998e97934c6bc666ea54598b35c570d2c92829689e7  genes.tsv          4,248,825 bytes   (upstream, not committed)
-f7d465c153d8235a61b9ad43322c98b1f15ace9577e6dc0250e27f19ac463ff5  drugs.tsv          7,253,304 bytes   (upstream, not committed)
+5a798ffdaddd775b8409fa22509d77d55c663ca84625808617a78b1fc75dcc9e  interactions.tsv                   16,163,629 bytes
+e3cfcff1001fdad9e0079998e97934c6bc666ea54598b35c570d2c92829689e7  genes.tsv                          4,248,825 bytes
+f7d465c153d8235a61b9ad43322c98b1f15ace9577e6dc0250e27f19ac463ff5  drugs.tsv                          7,253,304 bytes
+1f8826fb0b519296233dba3f987bc38efcfb3706032ed0c0685a6936f9b11e93  hgnc_complete_set_2026-06-02.txt   16,738,373 bytes   (HGNC monthly archive; genenames.org, "no restrictions")
+1d1fae3fa9e4b42a8959ef0a84b7b339a236a59403935dcb7e0f2dba20084435  dgidb_2026_06b.sql.gz              84,060,850 bytes   (temporary PMID-recovery input; NEVER committed)
 ```
+
+`hgnc_complete_set_2026-06-02.txt` is the immutable June-2026 monthly archive at
+`https://storage.googleapis.com/public-download-files/hgnc/archive/archive/monthly/tsv/…`,
+retrieved 2026-08-29; it aligns with DGIdb `2026-06b`'s HGNC source version `20260619`.
 
 **Committed** — the licence-filtered offline snapshot and its provenance manifest, under
-`data/external/dgidb/` (`.gitattributes` now marks `data/external/** -text`, so both are
-stored byte-exact on every platform):
+`data/external/dgidb/` (`.gitattributes` marks `data/external/** -text`, so both are stored
+byte-exact on every platform):
 
 ```
-7a9d0bf7c208075aeb56dfa7af30041cec7b33bf91c90a8999914a4f25655a45  data/external/dgidb/dgidb_2026-06b.interactions.filtered.tsv  13,930,492 bytes
-e0578756a191717d9ee2f4b19d1dfe10e51180033ac819a12281749b602ddd05  data/external/dgidb/dgidb_2026-06b.manifest.json                  16,626 bytes
+f7d2089facc17ddac01e422cab8dc89d48aae463573094490f04bc42ef0a0bee  data/external/dgidb/dgidb_2026-06b.interactions.filtered.tsv  14,016,155 bytes
+d6b6f171c725646dd5622e0e80ffadfb9b521cdf6fb02a164ad470f441fdf056  data/external/dgidb/dgidb_2026-06b.manifest.json                  25,470 bytes
 ```
 
-**`dgidb_2026-06b.interactions.filtered.tsv`** — 37,336 interaction records, 26 columns
-(schema in the manifest), one record per unique `record_key` (SHA-1 of the preceding
-fields). Contains records **only** from the six interaction sources whose redistribution
-terms are explicitly verified as compatible with committing them — **CIViC** (CC0 1.0),
-**ChEMBL** (CC BY-SA 3.0), **GuideToPharmacology** (CC BY-SA 4.0), **DoCM** (CC BY 4.0),
-**NCI** (US-Gov public domain), **FDA** (US-Gov public domain). DGIdb's other 15 interaction
-sources (NonCommercial, custom-restrictive, "unclear", or copyrighted supplementary tables —
-DTC, TTD, PharmGKB, OncoKB, COSMIC, CGI, CKB-CORE, CancerCommons, MyCancerGenome(+CT), TALC,
-TEND, TdgClinicalTrial, ClearityFoundation(CT+Biomarkers)) are **excluded**. Per-source
-licence text, URL, decision and reason are in the manifest and `LICENSES.md`. Gene identity
-is the canonical **Entrez ID** (DGIdb's HGNC-approved `gene_name` + single `hgnc:` concept
-id, joined to `gene_columns.json` by globally-unique symbol; 4,472 / 4,652 DGIdb genes
-resolved, the rest outside the frozen protein-coding space); the symbol is a consistency
-field only. Direction is normalised strictly from DGIdb's own
-`interactionClaimTypes.directionality` vocabulary into `inhibitory` (20,121) / `activating`
-(7,615) / `unknown` (9,600). `pmids` / `curation_type` / `indication` are absent from this
-DGIdb export and are always empty — never inferred. Rows are in a documented deterministic
-**evidence-display** order (not efficacy or clinical priority).
+**`dgidb_2026-06b.interactions.filtered.tsv`** — 37,343 interaction records, 26 columns
+(schema in the manifest), one record per unique `record_key` (SHA-1 of the preceding 25
+fields, `pmids` included). Contains records **only** from the six interaction sources whose
+redistribution terms are explicitly verified as compatible with committing them — **CIViC**
+(CC0 1.0), **ChEMBL** (CC BY-SA 3.0), **GuideToPharmacology** (CC BY-SA 4.0), **DoCM**
+(CC BY 4.0), **NCI** (US-Gov public domain), **FDA** (US-Gov public domain). DGIdb's other
+15 interaction sources (NonCommercial, custom-restrictive, "unclear", or copyrighted
+supplementary tables — DTC, TTD, PharmGKB, OncoKB, COSMIC, CGI, CKB-CORE, CancerCommons,
+MyCancerGenome(+CT), TALC, TEND, TdgClinicalTrial, ClearityFoundation(CT+Biomarkers)) are
+**excluded**. Per-source licence text, URL, decision, reason and record counts are in the
+manifest and `LICENSES.md`.
 
-The snapshot TSV **regenerates byte-identically** from the pinned assets:
-`py evidence.py --refresh` (or `--from-staging DIR`) reproduces
-`7a9d0bf7c208075aeb56dfa7af30041cec7b33bf91c90a8999914a4f25655a45` exactly. The manifest
-JSON is identical on regeneration **except** its `retrieval` block, which records the
-wall-clock `retrieved_utc`; its hash above is the committed bytes, not a reproducibility
-claim. `py evidence.py --validate` re-checks every invariant against the committed files
-with no network access.
+**Gene identity — identifier join only.** `DGIdb gene_concept_id (hgnc:<n>)` → `HGNC ID` →
+`entrez_id` via the pinned HGNC complete set, kept iff that Entrez is in `gene_columns.json`.
+The HGNC file's HGNC↔Entrez relation is verified 1:1 (no repeated `hgnc_id`, no shared
+Entrez); an ambiguous mapping is a hard failure. Symbols (HGNC approved vs DGIdb `gene_name`
+vs canonical) are compared for **consistency only** and never used as a key — **5** genes
+disagree (e.g. DepMap `TMEM30A` vs HGNC/DGIdb `CDC50A`) and the ID join resolves them
+correctly where the previous symbol-anchored code would have silently dropped them. **4,477
+/ 4,652** DGIdb gene concepts resolve (168 outside the canonical protein-coding space, 7 with
+no HGNC row). Direction is normalised strictly from DGIdb's own
+`interactionClaimTypes.directionality` vocabulary into `inhibitory` (20,128) / `activating`
+(7,615) / `unknown` (9,600).
+
+**Publications (`pmids`).** Recovered by identifier join from the **temporary** DGIdb
+`2026-06b` SQL dump (`interaction_claims` → `interaction_claims_publications` →
+`publications`, keyed by gene concept id + drug concept id + interaction source) — **never**
+parsed from free text. Structural linkage of retained records to an SQL interaction is
+**36,950 / 36,950 = 100%**. PMIDs are stored `;`-joined, numerically sorted, de-duplicated.
+Coverage is source-skewed and this is disclosed: **CIViC 1,068/1,076**, **DoCM 72/72**,
+**NCI 5,938/5,939**; **ChEMBL 0/12,815**, **GuideToPharmacology 0/17,050**, **FDA 0/391**
+(DGIdb records no claim-level publications for those three). **7,078** records (19%) carry
+≥1 PMID — the snapshot is not silently zero-coverage. `curation_type` / `indication` are
+absent from this DGIdb export and stay empty.
+
+**Deterministic.** Both committed files **regenerate byte-identically** across repeated
+builds and regardless of `--refresh` vs `--from-staging`:
+`py evidence.py --refresh` (or `--from-staging DIR`) reproduces the snapshot
+`f7d2089f…` and the manifest `d6b6f171…` exactly. No committed artifact contains a
+wall-clock value — the retrieval provenance is the fixed build input
+`config.DGIDB_RETRIEVED_UTC = 2026-08-29T00:00:00Z`; per-run execution times and the
+download-vs-staging mode go only to the git-ignored
+`data/external/dgidb/build_runlog.jsonl`. `py evidence.py --validate` re-checks every
+invariant (26 checks) against the committed files with no network access.
 
 **Scope.** Evidence retrieval only — no model, no efficacy / clinical-relevance / approval /
-indication / osteosarcoma-relevance inference. **This is not a claim that the whole DGIdb
-dataset is redistributable; it is not.** Every returned display record carries: *"A recorded
-drug–gene interaction does not establish efficacy for this sample or for osteosarcoma."*
+indication / interaction-direction-beyond-DGIdb / osteosarcoma-relevance inference. **This is
+not a claim that the whole DGIdb dataset is redistributable; it is not**, and each retained
+record additionally remains subject to its own source-specific licence terms (the compilation
+licence does not override them). Every returned display record carries: *"A recorded drug–gene
+interaction does not establish efficacy for this sample or for osteosarcoma."*

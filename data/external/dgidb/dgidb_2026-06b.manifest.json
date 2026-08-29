@@ -1,10 +1,17 @@
 {
   "artifact": "dgidb_2026-06b.interactions.filtered.tsv",
-  "description": "Licence-filtered offline snapshot of DGIdb drug-gene interaction records for Phase 2 evidence retrieval. Evidence retrieval only -- not treatment prediction, not a recommendation. Contains records ONLY from interaction sources whose redistribution terms are explicitly verified as compatible with committing them; the full DGIdb dataset is NOT redistributable.",
+  "description": "Licence-filtered offline snapshot of DGIdb drug-gene interaction records for Phase 2 evidence retrieval. Evidence retrieval only -- not treatment prediction, not a recommendation. Contains records ONLY from interaction sources whose redistribution terms are explicitly verified as compatible with committing them; the full DGIdb dataset is NOT redistributable, and individual records remain subject to their own source-specific terms.",
   "dgidb": {
     "release_tag": "2026-06b",
     "release_page": "https://github.com/dgidb/dgidb-data/releases/tag/2026-06b",
-    "graphql_service_version": "v.5.0.12 (recorded 2026-08-29)",
+    "versions": {
+      "release_tag": "2026-06b",
+      "interaction_data_version": "Dec-2023",
+      "dgidb_app_version_tsv_comment": "v.5.0.11",
+      "dgidb_app_version_graphql_at_retrieval": "v.5.0.12",
+      "sql_dump_pg_dump_version_line": "-- Dumped by pg_dump version 18.1 (Homebrew)",
+      "note": "The release is tagged 2026-06b and was published 2026-06-23, but it PACKAGES interaction content dated 'Dec-2023'. The interaction records are NOT June-2026 data. Source-level versions (per 'sources') range from 2011 to 2026."
+    },
     "upstream_header_comments": {
       "interactions.tsv": [
         "# Data version: Dec-2023",
@@ -25,36 +32,165 @@
       "url": "https://github.com/dgidb/dgidb-data/releases/download/2026-06b/interactions.tsv",
       "bytes": 16163629,
       "sha256": "5a798ffdaddd775b8409fa22509d77d55c663ca84625808617a78b1fc75dcc9e",
+      "role": "committed-snapshot source (upstream TSV, not committed)",
       "verified": true
     },
     "genes.tsv": {
       "url": "https://github.com/dgidb/dgidb-data/releases/download/2026-06b/genes.tsv",
       "bytes": 4248825,
       "sha256": "e3cfcff1001fdad9e0079998e97934c6bc666ea54598b35c570d2c92829689e7",
+      "role": "committed-snapshot source (upstream TSV, not committed)",
       "verified": true
     },
     "drugs.tsv": {
       "url": "https://github.com/dgidb/dgidb-data/releases/download/2026-06b/drugs.tsv",
       "bytes": 7253304,
       "sha256": "f7d465c153d8235a61b9ad43322c98b1f15ace9577e6dc0250e27f19ac463ff5",
+      "role": "committed-snapshot source (upstream TSV, not committed)",
+      "verified": true
+    },
+    "hgnc_complete_set": {
+      "url": "https://storage.googleapis.com/public-download-files/hgnc/archive/archive/monthly/tsv/hgnc_complete_set_2026-06-02.txt",
+      "bytes": 16738373,
+      "sha256": "1f8826fb0b519296233dba3f987bc38efcfb3706032ed0c0685a6936f9b11e93",
+      "version": "HGNC monthly release 2026-06-02",
+      "role": "gene-identity crosswalk input (not committed)",
+      "license": "genenames.org: no restrictions on use of HGNC data",
+      "license_url": "https://www.genenames.org/about/license/",
+      "verified": true
+    },
+    "sql_dump": {
+      "url": "https://github.com/dgidb/dgidb-data/releases/download/2026-06b/dgidb_2026_06b.sql.gz",
+      "bytes": 84060850,
+      "sha256": "1d1fae3fa9e4b42a8959ef0a84b7b339a236a59403935dcb7e0f2dba20084435",
+      "role": "temporary publication-recovery input -- NOT committed",
       "verified": true
     }
   },
   "retrieval": {
-    "retrieved_utc": "2026-08-29T18:59:20Z",
-    "method": "build from pre-staged assets that passed the exact size/SHA-256 gate",
-    "tool": "evidence.py build_snapshot"
+    "retrieved_utc": "2026-08-29T00:00:00Z",
+    "retrieved_utc_source": "fixed build input (config.DGIDB_RETRIEVED_UTC)",
+    "method": "five pinned inputs -- the 3 DGIdb 2026-06b release TSVs, the HGNC monthly complete set, and the DGIdb 2026-06b SQL dump -- each gated on exact byte size and SHA-256 before use. Whether they were downloaded (--refresh) or pre-staged (--from-staging) does not affect the output; the committed snapshot and this manifest are byte-identical across rebuilds. The SQL dump is a temporary input and is never committed.",
+    "tool": "evidence.py build_snapshot",
+    "note": "No wall-clock value appears in any committed artifact. Per-run execution timestamps (and the download-vs-staging mode) are appended to the git-ignored build_runlog.jsonl."
   },
   "gene_identity": {
     "primary_identifier": "entrez_id (canonical space)",
-    "method": "DGIdb gene_name (HGNC-approved symbol) with exactly one non-empty hgnc: concept id, joined to gene_columns.json by globally-unique symbol; canonical Entrez retained as the primary identity; symbol kept only as a consistency field; gene_claim_name / aliases never used; non-uniquely-resolvable genes dropped and counted.",
+    "method": "identifier join only: DGIdb gene_concept_id (hgnc:<n>) -> HGNC ID -> entrez_id via the pinned HGNC complete set, then kept iff that Entrez is in gene_columns.json. Symbols (HGNC approved vs DGIdb gene_name vs canonical) are compared for consistency only and never used as an identity key. Ambiguous HGNC->Entrez mappings hard-fail. gene_claim_name / aliases are never used.",
     "canonical_space_file": "gene_columns.json",
     "canonical_space_sha256": "a4b8069cc93af48f01e745bb1a15f4eaf4a7b67c9f92ca44bef3bb9e44c6d0a1",
-    "distinct_dgidb_genes": 4652,
-    "resolved_to_canonical_entrez": 4472,
-    "unresolved_no_or_multi_hgnc_concept": 7,
-    "unresolved_not_in_canonical_space": 173,
-    "symbol_consistency_failures": 0
+    "hgnc_crosswalk": {
+      "file": "hgnc_complete_set_2026-06-02.txt",
+      "sha256": "1f8826fb0b519296233dba3f987bc38efcfb3706032ed0c0685a6936f9b11e93",
+      "bytes": 16738373,
+      "version": "HGNC monthly release 2026-06-02",
+      "url": "https://storage.googleapis.com/public-download-files/hgnc/archive/archive/monthly/tsv/hgnc_complete_set_2026-06-02.txt",
+      "rows": 44996,
+      "rows_with_entrez_id": 44382,
+      "rows_without_entrez_id": 614,
+      "relation": "1:1 (verified: no hgnc_id repeats, no shared Entrez)"
+    },
+    "distinct_dgidb_gene_concepts": 4652,
+    "resolved_to_canonical_entrez": 4477,
+    "unresolved_concept_not_hgnc_or_not_in_hgnc_file": 7,
+    "unresolved_hgnc_row_has_no_entrez": 0,
+    "unresolved_entrez_not_in_canonical_space": 168,
+    "symbol_agreement_all_three": 4472,
+    "symbol_disagreements": 5,
+    "symbol_disagreement_examples": [
+      {
+        "entrez_id": "55754",
+        "hgnc_id": "HGNC:16667",
+        "hgnc_symbol": "CDC50A",
+        "canonical_symbol": "TMEM30A",
+        "dgidb_gene_name": "CDC50A"
+      },
+      {
+        "entrez_id": "339983",
+        "hgnc_id": "HGNC:26742",
+        "hgnc_symbol": "ASPNAT",
+        "canonical_symbol": "NAT8L",
+        "dgidb_gene_name": "ASPNAT"
+      },
+      {
+        "entrez_id": "56901",
+        "hgnc_id": "HGNC:29836",
+        "hgnc_symbol": "COXFA4L2",
+        "canonical_symbol": "NDUFA4L2",
+        "dgidb_gene_name": "COXFA4L2"
+      },
+      {
+        "entrez_id": "4691",
+        "hgnc_id": "HGNC:7667",
+        "hgnc_symbol": "NUCLEOLIN",
+        "canonical_symbol": "NCL",
+        "dgidb_gene_name": "NUCLEOLIN"
+      },
+      {
+        "entrez_id": "4697",
+        "hgnc_id": "HGNC:7687",
+        "hgnc_symbol": "COXFA4",
+        "canonical_symbol": "NDUFA4",
+        "dgidb_gene_name": "COXFA4"
+      }
+    ]
+  },
+  "publications": {
+    "sql_dump": {
+      "file": "dgidb_2026_06b.sql.gz",
+      "sha256": "1d1fae3fa9e4b42a8959ef0a84b7b339a236a59403935dcb7e0f2dba20084435",
+      "bytes": 84060850,
+      "url": "https://github.com/dgidb/dgidb-data/releases/download/2026-06b/dgidb_2026_06b.sql.gz",
+      "role": "temporary build input -- NOT committed",
+      "pg_dump_version_line": "-- Dumped by pg_dump version 18.1 (Homebrew)",
+      "interaction_claims_rows": 101060
+    },
+    "method": "SQL dump interaction_claims -> interaction_claims_publications -> publications, joined onto retained records by (gene concept_id, drug concept_id, interaction source). PMIDs sorted numerically and de-duplicated. NEVER parsed from free text.",
+    "structural_linkage": {
+      "distinct_key_triples": 36950,
+      "concept_identified_triples": 36950,
+      "triples_without_drug_concept_id": 0,
+      "linked_to_sql_interaction": 36950,
+      "linkage_rate_over_concept_identified": 1.0
+    },
+    "distinct_triples_with_pmids": 6914,
+    "total_pmid_mentions_over_triples": 9836,
+    "sep": ";",
+    "sorted": "numeric ascending, de-duplicated within a record",
+    "records_with_pmids": 7078,
+    "coverage_by_source": {
+      "CIViC": {
+        "records": 1076,
+        "records_with_pmids": 1068,
+        "pmids": 2139
+      },
+      "ChEMBL": {
+        "records": 12815,
+        "records_with_pmids": 0,
+        "pmids": 0
+      },
+      "DoCM": {
+        "records": 72,
+        "records_with_pmids": 72,
+        "pmids": 1276
+      },
+      "FDA": {
+        "records": 391,
+        "records_with_pmids": 0,
+        "pmids": 0
+      },
+      "GuideToPharmacology": {
+        "records": 17050,
+        "records_with_pmids": 0,
+        "pmids": 0
+      },
+      "NCI": {
+        "records": 5939,
+        "records_with_pmids": 5938,
+        "pmids": 6886
+      }
+    },
+    "note": "Claim-level publications are absent in DGIdb for ChEMBL, GuideToPharmacology and FDA in this release, so their records carry no PMIDs. CIViC, DoCM and NCI are ~fully covered. Records with no DGIdb publication legitimately stay empty."
   },
   "direction_vocabulary": {
     "provenance": "DGIdb GraphQL interactionClaimTypes.directionality enum, retrieved 2026-08-29",
@@ -97,7 +233,12 @@
       "redistribution_decision": "included",
       "decision_reason": "CC0 1.0 public-domain dedication; redistribution unrestricted.",
       "upstream_interaction_rows": 1182,
-      "retained_records": 1076
+      "retained_records": 1076,
+      "publication_coverage": {
+        "records": 1076,
+        "records_with_pmids": 1068,
+        "pmids": 2139
+      }
     },
     "ChEMBL": {
       "role": "interaction",
@@ -107,7 +248,12 @@
       "redistribution_decision": "included",
       "decision_reason": "CC BY-SA 3.0; redistribution permitted with attribution and ShareAlike.",
       "upstream_interaction_rows": 18202,
-      "retained_records": 12809
+      "retained_records": 12815,
+      "publication_coverage": {
+        "records": 12815,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "GuideToPharmacology": {
       "role": "interaction",
@@ -117,7 +263,12 @@
       "redistribution_decision": "included",
       "decision_reason": "CC BY-SA 4.0; redistribution permitted with attribution and ShareAlike.",
       "upstream_interaction_rows": 17105,
-      "retained_records": 17049
+      "retained_records": 17050,
+      "publication_coverage": {
+        "records": 17050,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "DoCM": {
       "role": "interaction",
@@ -127,7 +278,12 @@
       "redistribution_decision": "included",
       "decision_reason": "CC BY 4.0; redistribution permitted with attribution.",
       "upstream_interaction_rows": 76,
-      "retained_records": 72
+      "retained_records": 72,
+      "publication_coverage": {
+        "records": 72,
+        "records_with_pmids": 72,
+        "pmids": 1276
+      }
     },
     "NCI": {
       "role": "interaction",
@@ -137,7 +293,12 @@
       "redistribution_decision": "included",
       "decision_reason": "U.S. Government work, public domain; redistribution unrestricted.",
       "upstream_interaction_rows": 6231,
-      "retained_records": 5939
+      "retained_records": 5939,
+      "publication_coverage": {
+        "records": 5939,
+        "records_with_pmids": 5938,
+        "pmids": 6886
+      }
     },
     "FDA": {
       "role": "interaction",
@@ -147,7 +308,12 @@
       "redistribution_decision": "included",
       "decision_reason": "U.S. Government work, public domain; redistribution unrestricted.",
       "upstream_interaction_rows": 427,
-      "retained_records": 391
+      "retained_records": 391,
+      "publication_coverage": {
+        "records": 391,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "DTC": {
       "role": "interaction",
@@ -157,7 +323,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "NonCommercial clause (CC BY-NC-SA 3.0).",
       "upstream_interaction_rows": 23879,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "PharmGKB": {
       "role": "interaction",
@@ -167,7 +338,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "Ambiguous / conflicting terms: DGIdb's CC BY-SA label is not reflected by PharmGKB's custom data-usage policy; project scope also excludes PharmGKB (CLAUDE.md section 10).",
       "upstream_interaction_rows": 6545,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "TTD": {
       "role": "interaction",
@@ -177,7 +353,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "Unclear / self-contradictory redistribution terms.",
       "upstream_interaction_rows": 15245,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "TdgClinicalTrial": {
       "role": "interaction",
@@ -187,7 +368,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "No redistribution licence (copyrighted supplementary data).",
       "upstream_interaction_rows": 5071,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "TEND": {
       "role": "interaction",
@@ -197,7 +383,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "No redistribution licence (copyrighted supplementary data).",
       "upstream_interaction_rows": 2242,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "CKB-CORE": {
       "role": "interaction",
@@ -207,7 +398,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "NonCommercial clause (CC BY-NC-SA 4.0).",
       "upstream_interaction_rows": 2051,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "MyCancerGenome": {
       "role": "interaction",
@@ -217,7 +413,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "Restrictive custom NonCommercial terms.",
       "upstream_interaction_rows": 821,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "MyCancerGenomeClinicalTrial": {
       "role": "interaction",
@@ -227,7 +428,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "Restrictive custom NonCommercial terms.",
       "upstream_interaction_rows": 316,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "TALC": {
       "role": "interaction",
@@ -237,7 +443,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "No redistribution licence (copyrighted publication tables).",
       "upstream_interaction_rows": 602,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "CGI": {
       "role": "interaction",
@@ -247,7 +458,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "NonCommercial clause (CC BY-NC 4.0).",
       "upstream_interaction_rows": 368,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "ClearityFoundationClinicalTrial": {
       "role": "interaction",
@@ -257,7 +473,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "Unknown / unverifiable terms; source data no longer available.",
       "upstream_interaction_rows": 240,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "ClearityFoundationBiomarkers": {
       "role": "interaction",
@@ -267,7 +488,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "Unknown / unverifiable terms; source data no longer available.",
       "upstream_interaction_rows": 163,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "OncoKB": {
       "role": "interaction",
@@ -277,7 +503,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "Restrictive NonCommercial terms.",
       "upstream_interaction_rows": 148,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "CancerCommons": {
       "role": "interaction",
@@ -287,7 +518,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "Custom NonCommercial terms.",
       "upstream_interaction_rows": 109,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     },
     "COSMIC": {
       "role": "interaction",
@@ -297,7 +533,12 @@
       "redistribution_decision": "excluded",
       "decision_reason": "NonCommercial-only; redistribution requires a COSMIC licence.",
       "upstream_interaction_rows": 37,
-      "retained_records": 0
+      "retained_records": 0,
+      "publication_coverage": {
+        "records": 0,
+        "records_with_pmids": 0,
+        "pmids": 0
+      }
     }
   },
   "filter": {
@@ -328,13 +569,13 @@
     ],
     "upstream_interaction_rows_total": 101060,
     "rows_from_included_sources": 43223,
-    "rows_dropped_unresolved_gene": 5591,
-    "rows_dropped_no_drug_identity": 295,
+    "rows_dropped_unresolved_gene": 5583,
+    "rows_dropped_no_drug_identity": 296,
     "duplicate_records_collapsed": 1,
-    "records_written": 37336
+    "records_written": 37343
   },
   "direction_tier_counts": {
-    "inhibitory": 20121,
+    "inhibitory": 20128,
     "activating": 7615,
     "unknown": 9600
   },
@@ -368,20 +609,20 @@
       "dgidb_release_tag",
       "record_key"
     ],
-    "bytes": 13930492,
-    "sha256": "7a9d0bf7c208075aeb56dfa7af30041cec7b33bf91c90a8999914a4f25655a45",
-    "record_count": 37336,
+    "bytes": 14016155,
+    "sha256": "f7d2089facc17ddac01e422cab8dc89d48aae463573094490f04bc42ef0a0bee",
+    "record_count": 37343,
     "sort_order": "entrez_id, direction tier, interaction_score desc (empty last), interaction_source, drug_name, drug_concept_id, drug_claim_name, interaction_type_raw, record_key",
     "row_ordering_note": "Deterministic evidence-DISPLAY ordering, for reproducibility only. NOT predicted efficacy, clinical priority, or recommendation strength. Approval and indication never affect ordering."
   },
   "absent_fields": {
-    "pmids": "DGIdb 2026-06b interactions.tsv has no publication-identifier column; PMIDs embedded in free-text drug names are NOT parsed (that would be inference). Always empty.",
+    "pmids": "interactions.tsv carries no publication column; PMIDs are recovered from the release-aligned SQL dump by identifier join (never parsed from free text). Empty where DGIdb records no claim-level publication for that (gene, drug, source) -- notably all ChEMBL / GuideToPharmacology / FDA records in this release.",
     "curation_type": "No curation/evidence-type column in this export; the numeric evidence_score is retained instead. Always empty.",
     "indication": "No disease/indication column in this export. Always empty."
   },
   "disclaimer": "A recorded drug–gene interaction does not establish efficacy for this sample or for osteosarcoma.",
   "scope": {
     "statement": "Evidence retrieval only. Not treatment prediction, not a recommendation. No efficacy, clinical relevance, approval, indication, interaction direction beyond DGIdb's explicit vocabulary, or osteosarcoma relevance is inferred. The returned drugs are not candidate treatments.",
-    "redistribution": "Snapshot contains records ONLY from the explicitly-verified redistributable interaction sources listed under filter.included_sources. The full DGIdb dataset is NOT redistributable."
+    "redistribution": "Snapshot contains records ONLY from the explicitly-verified redistributable interaction sources in filter.included_sources. The full DGIdb dataset is NOT redistributable. Each retained record additionally remains subject to its own source-specific licence terms (per-record source_license / source_license_url); the compilation licence does not override them. See LICENSES.md."
   }
 }

@@ -203,7 +203,7 @@ Sixteen modules today; Phase 2 (§9.7) adds more. Twelve have been read in full.
 | `prepare_geneformer_input.py` | Reconstructs pseudo-counts from log-TPM (`TPM = 2**log_tpm - 1`) since Geneformer wants raw counts and DepMap ships log-TPM; maps canonical `SYMBOL (ENTREZ)` to Ensembl via `ensembl_map.csv` (columns `entrez,ensembl_id`). The frozen Kaggle embeddings used a `mygene`-built map with 18,460/18,460 zero attrition, and that Kaggle cache was never carried back here. `data/processed/ensembl_map.csv` **now exists** — committed in `d78fbf8`, rebuilt from the static NCBI `gene2ensembl` reference (not `mygene`), coverage **18,459/18,460**; the one gap is Entrez `79400` (NOX5), which NCBI carries no Ensembl xref for. A local `prepare_geneformer_input` re-run would therefore drop NOX5 (`genes_dropped_no_ensembl == 1`); the frozen `geneformer_embeddings.csv` is unaffected. Full provenance: `capstone/data-integrity-hashes.md`. | yes |
 | `sample_profile.py` | Phase 2 external-sample loader. `parse_gct` (GCT v1.2 schema validation) + `load_external_sample`: reads the committed `BG003082.gene_tpm.gct.gz` (linear TPM, versioned Ensembl IDs), strips Ensembl version suffixes, joins to canonical Entrez via `ensembl_map.csv` **only** (no symbol fallback — see the module docstring for why), sums linear TPM within a canonical gene, reindexes to `gene_columns.json` order, `log2(TPM+1)`, leaves unresolved canonical genes as explicit `NaN` (never 0), returns `(Series, provenance dict)`. Does not impute, call a model, or write to `data/processed/`. `--self-test` covers the schema/edge cases offline. | yes (authored) |
 | `geneformer_sample_input.py` | Phase 2 repo-local builder (commit `0756a90`): turns the committed GCT + `ensembl_map.csv` into validated Geneformer-input frames (`X`, `var`, `obs`) — re-keys canonical Entrez → Ensembl, asserts no NaN/inf/negative, unique well-formed ENSG, no symbol fallback, extra-drop guard for a measured gene with no Ensembl id. No tokenisation/GPU/network. The GPU half (`capstone/kaggle_bg003082_embedding.py`) ran on Kaggle 2026-08-29 and produced the committed `geneformer_bg003082_embedding.csv` sidecar. `--self-test` green. | yes (authored) |
-| `evidence.py` | Phase 2 DGIdb drug–gene interaction **evidence retrieval** (not treatment prediction; no model). `load_snapshot` / `get_evidence_for_gene(entrez_id, symbol=None, top_k=config.TOP_K_EVIDENCE_PER_GENE)` read the committed offline snapshot `data/external/dgidb/dgidb_2026-06b.*` — **no network**, missing snapshot raises rather than querying live. `build_snapshot` (`--refresh` / `--from-staging`) downloads the pinned DGIdb `2026-06b` assets to temp staging, gates them on exact size+SHA-256, filters to the 6 redistribution-verified interaction sources (`config.DGIDB_INCLUDED_SOURCES`; CC0/CC-BY/CC-BY-SA/US-Gov-PD only), keys on canonical Entrez, normalises direction strictly from DGIdb's `interactionClaimTypes.directionality` vocab into inhibitory/activating/unknown, dedups, writes a deterministic byte-identical TSV + provenance manifest. `top_k` is enforced per direction tier; every returned record carries `config.DGIDB_EVIDENCE_DISCLAIMER`. Never commits the unfiltered upstream TSVs. `--self-test` (synthetic, offline) and `--validate` (committed snapshot). | yes (authored) |
+| `evidence.py` | Phase 2 DGIdb drug–gene interaction **evidence retrieval** (not treatment prediction; no model). `load_snapshot` / `get_evidence_for_gene(entrez_id, symbol=None, top_k=config.TOP_K_EVIDENCE_PER_GENE)` read the committed offline snapshot `data/external/dgidb/dgidb_2026-06b.*` — **no network**, missing snapshot raises rather than querying live. `build_snapshot` (`--refresh` / `--from-staging`) takes **5 pinned inputs** (3 DGIdb `2026-06b` TSVs + the HGNC `2026-06-02` monthly complete set + the DGIdb `2026-06b` SQL dump), gates each on exact size+SHA-256, filters to the 6 redistribution-verified interaction sources (`config.DGIDB_INCLUDED_SOURCES`; CC0/CC-BY/CC-BY-SA/US-Gov-PD only). **Gene identity is an identifier join**: `hgnc:<n>` → HGNC ID → Entrez via the HGNC file (verified 1:1; ambiguous = hard fail), kept iff canonical; symbols are a 3-way consistency check only, never a key. **PMIDs** are recovered by identifier join from the SQL dump (`interaction_claims`→`…_publications`→`publications`), `;`-joined, numerically sorted, deduped — never parsed from free text; empty where DGIdb has none (all ChEMBL/GtoP/FDA). Direction from DGIdb's `interactionClaimTypes.directionality` vocab → inhibitory/activating/unknown. `top_k` enforced per tier; every returned record carries `config.DGIDB_EVIDENCE_DISCLAIMER`. **Both committed files are byte-identical across rebuilds and `--refresh`≡`--from-staging`** — no wall-clock in any tracked output; `config.DGIDB_RETRIEVED_UTC` is the fixed provenance input, per-run times go to the git-ignored `build_runlog.jsonl`. Never commits the unfiltered TSVs, the HGNC file, or the SQL dump. `--self-test` (synthetic, offline; builds a tiny pg_dump `.sql.gz`) and `--validate` (26 checks on the committed snapshot). | yes (authored) |
 | `splits.py` | Patient-grouped, lineage-stratified split generation | no |
 | `checks.py` | Integrity assertions; fails the run on group straddling; 8 sections including PRISM and osteosarcoma coverage | yes |
 | `make_fixture.py` | Synthetic fixture generation mirroring real DepMap file structure, including a synthetic Bone/Osteosarcoma subset and a synthetic PRISM matrix | yes |
@@ -217,12 +217,15 @@ Sixteen modules today; Phase 2 (§9.7) adds more. Twelve have been read in full.
 the frozen `geneformer_embeddings.csv` (1,140 × 768), which is untouched.
 **`data/external/`** holds three tracked files:
 `sid_osteosarc/BG003082.gene_tpm.gct.gz` (`d78fbf8`) and, added 2026-08-29,
-`dgidb/dgidb_2026-06b.interactions.filtered.tsv` (37,336 licence-filtered DGIdb interaction
-records, ~13.9 MB) + `dgidb/dgidb_2026-06b.manifest.json`. `.gitattributes` now marks
-`data/external/** -text` so those bytes survive a clone on any platform. The **unfiltered**
-DGIdb release TSVs are pinned by hash in `config.DGIDB_ASSETS` but are **never committed**.
-`data/processed/predictions/` is gitignored — 12 files, ~12 MB, regenerable in ~3 minutes
-from `--save-predictions` on both modules.
+`dgidb/dgidb_2026-06b.interactions.filtered.tsv` (**37,343** licence-filtered DGIdb
+interaction records, ~14 MB, with `pmids` populated from the SQL dump) +
+`dgidb/dgidb_2026-06b.manifest.json`. `.gitattributes` marks `data/external/** -text` so
+those bytes survive a clone on any platform. The evidence build's 5 pinned inputs — the 3
+unfiltered DGIdb release TSVs (`config.DGIDB_ASSETS`), the HGNC monthly complete set
+(`config.DGIDB_HGNC_ASSET`) and the DGIdb SQL dump (`config.DGIDB_SQL_ASSET`) — are **never
+committed**. `data/external/dgidb/build_runlog.jsonl` is git-ignored (the only place a
+wall-clock build time is written). `data/processed/predictions/` is gitignored — 12 files,
+~12 MB, regenerable in ~3 minutes from `--save-predictions` on both modules.
 **PRISM (`prism_response`) is fully wired end to end in code — `config.py`'s three
 `prism_*` aliases, `build_dataset.load_prism`, both `run_task` functions' `task="prism"`
 branch, `checks.py` §7, `analysis.py --task prism` — but no raw PRISM file has ever been
@@ -396,22 +399,29 @@ not a row in the frozen matrix, and it changes no scientific claim: BG003082 sta
 Phase 1 embeddings (bulk-tumour input, NCBI-not-`mygene` map, fresh revision pin) — see
 `capstone/geneformer-bg003082-feasibility.md` §3–§5.
 
-**`evidence.py` and the committed DGIdb snapshot now exist** (2026-08-29). `evidence.py` is
-the offline, licence-filtered DGIdb drug–gene interaction **evidence-retrieval** layer —
-retrieval only, no model, no efficacy/approval/indication/osteosarcoma inference. Pinned
-upstream: DGIdb release `2026-06b` (`interactions.tsv` / `genes.tsv` / `drugs.tsv`, exact
-size + SHA-256 in `config.DGIDB_ASSETS`), verified on `--refresh`, never committed. Committed:
-`data/external/dgidb/dgidb_2026-06b.interactions.filtered.tsv` (37,336 records, SHA-256
-`7a9d0bf7c208075aeb56dfa7af30041cec7b33bf91c90a8999914a4f25655a45`, regenerates
-byte-identically) + `…manifest.json`. Records only from the 6 redistribution-verified
-interaction sources (CIViC / ChEMBL / GuideToPharmacology / DoCM / NCI / FDA — CC0 / CC-BY /
-CC-BY-SA / US-Gov public domain); DGIdb's other 15 interaction sources are excluded and the
-per-source decision is recorded. Entrez is the primary gene identity; direction is
-normalised strictly from DGIdb's `interactionClaimTypes.directionality` vocab into
-inhibitory / activating / unknown; `get_evidence_for_gene` enforces `top_k` per direction
-tier and attaches `config.DGIDB_EVIDENCE_DISCLAIMER` to every record. `--self-test` and
-`--validate` green; `py checks.py` unaffected (32/32). Details:
-`capstone/data-integrity-hashes.md`, `LICENSES.md`, and the manifest.
+**`evidence.py` and the committed DGIdb snapshot now exist** (2026-08-29; integrity repair
+same day). Offline, licence-filtered DGIdb drug–gene interaction **evidence retrieval** —
+retrieval only, no model, no efficacy/approval/indication/osteosarcoma inference. Committed
+pair under `data/external/dgidb/`:
+`dgidb_2026-06b.interactions.filtered.tsv` (**37,343** records, SHA-256
+`f7d2089facc17ddac01e422cab8dc89d48aae463573094490f04bc42ef0a0bee`) +
+`dgidb_2026-06b.manifest.json` (SHA-256
+`d6b6f171c725646dd5622e0e80ffadfb9b521cdf6fb02a164ad470f441fdf056`). **Both regenerate
+byte-identically** across rebuilds and regardless of `--refresh` vs `--from-staging`; no
+tracked output carries a wall-clock value. Records only from the 6 redistribution-verified
+interaction sources (CIViC / ChEMBL / GuideToPharmacology / DoCM / NCI / FDA); the other 15
+are excluded with the per-source decision recorded, and each retained record still names its
+own source licence (compilation licence does not override it). **Gene identity = HGNC-ID →
+Entrez join** (pinned HGNC `2026-06-02`; 1:1 verified, ambiguous = hard fail); symbols are a
+consistency check only (5 disagreements recorded, e.g. `TMEM30A`/`CDC50A`). **`pmids`** are
+recovered by identifier join from the pinned (temporary, uncommitted) DGIdb SQL dump —
+100% structural linkage, `;`-joined/numeric-sorted/deduped, never from free text;
+source-skewed coverage disclosed (CIViC/DoCM/NCI ~full, ChEMBL/GtoP/FDA zero; 7,078 records
+overall). Three versions kept distinct: release tag `2026-06b`, interaction data `Dec-2023`,
+app `v.5.0.11`/`v.5.0.12` — the records are **not** June-2026 data. `--self-test`,
+`--validate` (26 checks), `sample_profile`/`geneformer_sample_input` self-tests, and
+`py checks.py` (32/32) all green. Details: `capstone/data-integrity-hashes.md`,
+`LICENSES.md`, and the manifest.
 
 Still to build: `case_study.py` (orchestration + no-leakage / ranking-direction assertions +
 osteosarcoma-aggregate stat), `report.py` (offline HTML), and `checks.py`

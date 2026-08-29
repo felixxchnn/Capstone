@@ -17,3 +17,7 @@ data/processed/processed.zip
 Thumbs.db
 .DS_Store
 data/processed/predictions/
+
+# evidence.py volatile per-run execution log (wall-clock times live ONLY here;
+# every committed evidence artifact is deterministic and carries no timestamp)
+data/external/dgidb/build_runlog.jsonl
