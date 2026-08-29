@@ -56,8 +56,12 @@ Setup (run once in a Kaggle/Colab cell, mirroring the 2026-08-06 notebook)
     !pip install -q anndata scanpy
     !git lfs install
     !GIT_LFS_SKIP_SMUDGE=1 git clone https://huggingface.co/ctheodoris/Geneformer /kaggle/working/Geneformer
-    # PIN the revision -- fill GENEFORMER_REVISION below with this commit:
-    !cd /kaggle/working/Geneformer && git rev-parse HEAD
+    # GENEFORMER_REVISION is already pinned below to the verified immutable commit
+    #   04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5
+    # Check that exact commit out and confirm HEAD matches before installing --
+    # do NOT run against whatever `main` happens to be on the day:
+    !cd /kaggle/working/Geneformer && git checkout 04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5
+    !cd /kaggle/working/Geneformer && git rev-parse HEAD   # must echo the SHA above
     !cd /kaggle/working/Geneformer && pip install -q .
     !pip install -q transformers==4.49.0
     # then repair the LFS .pkl stubs and apply the tokenizer .iloc patch --
@@ -83,10 +87,27 @@ import pandas as pd
 # Pinning / settings
 # --------------------------------------------------------------------------
 
-# FILL THIS IN on Kaggle from `git -C Geneformer rev-parse HEAD` before running.
-# Leave as None only for a first exploratory pass; a committed provenance record
-# MUST have the real 40-char commit here.
-GENEFORMER_REVISION: str | None = None
+# Immutable full-length commit SHA of the ctheodoris/Geneformer Hub repo. ONE
+# revision pins all three things pulled from that repo: the `geneformer` package
+# source (cloned + `pip install .` in the setup cell), the LFS `.pkl`
+# dictionaries repaired by repair_geneformer_dictionaries(), and the
+# Geneformer-V2-104M_CLcancer weights fetched by download_model().
+#
+# PROVENANCE -- do NOT read this as "the Phase 1 revision recovered":
+#   The frozen 1,140-row training matrix data/processed/geneformer_embeddings.csv
+#   was built on Kaggle on 2026-08-06 by
+#     git clone https://huggingface.co/ctheodoris/Geneformer   (no revision arg)
+#   and run_geneformer_embeddings.py's snapshot_download() with no `revision=`
+#   (capstone/kaggle_notebook_v2_2026-08-06.ipynb, cells 1 and 21). That commit
+#   was never captured and CANNOT be recovered from this repo or from Kaggle.
+#   The SHA below is therefore a NEW pin, verified against the Hub for the
+#   BG003082 run only. It is the current HEAD of `main` ("Update README.md",
+#   2026-05-26; repo not gated), which predates the 2026-08-06 training run, so
+#   it is *probably* the same code Phase 1 used -- but that is an inference from
+#   commit dates, not a verified match, and BG003082's Geneformer output is not
+#   bytewise-commensurable with the Phase 1 embeddings regardless
+#   (capstone/geneformer-bg003082-feasibility.md sec 3).
+GENEFORMER_REVISION: str = "04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5"
 
 # The model subdirectory inside the ctheodoris/Geneformer repo. Cancer-domain,
 # continually-pretrained V2, plain PyTorch (runs on a T4; NOT the NVIDIA
@@ -212,7 +233,7 @@ def repair_geneformer_dictionaries() -> list[str]:
 
     stubs = [p for p in glob.glob(f"{installed}/**/*.pkl", recursive=True)
              if is_stub(p)]
-    repo_files = list_repo_files(MODEL_REPO)
+    repo_files = list_repo_files(MODEL_REPO, revision=GENEFORMER_REVISION)
     repaired: list[str] = []
     for stub in stubs:
         name = os.path.basename(stub)
@@ -220,7 +241,7 @@ def repair_geneformer_dictionaries() -> list[str]:
         if not match:
             print(f"  no repo match for {name}")
             continue
-        real = hf_hub_download(MODEL_REPO, match[0])
+        real = hf_hub_download(MODEL_REPO, match[0], revision=GENEFORMER_REVISION)
         Path(stub).write_bytes(Path(real).read_bytes())
         repaired.append(os.path.relpath(stub, installed))
     print(f"  repaired {len(repaired)} dictionary file(s)")
@@ -380,14 +401,12 @@ def verify_tokenised_sample(dataset_path: Path, X: pd.DataFrame,
 def download_model(work_dir: Path) -> Path:
     from huggingface_hub import snapshot_download
 
-    kwargs = dict(
+    repo_dir = snapshot_download(
         repo_id=MODEL_REPO,
         allow_patterns=[f"{MODEL_SUBDIR}/*"],
         local_dir=str(work_dir / "geneformer_repo"),
+        revision=GENEFORMER_REVISION,
     )
-    if GENEFORMER_REVISION:
-        kwargs["revision"] = GENEFORMER_REVISION
-    repo_dir = snapshot_download(**kwargs)
     model_dir = Path(repo_dir) / MODEL_SUBDIR
     if not model_dir.is_dir():
         raise FileNotFoundError(f"model dir not found at {model_dir}")
@@ -481,9 +500,11 @@ def main() -> int:
     print(f"  gpu      : {env['gpu']}")
     print(f"  geneformer revision (pinned/resolved): "
           f"{env['geneformer_revision_pinned']} / {env['geneformer_revision_resolved']}")
-    if env["geneformer_revision_resolved"] is None:
-        print("  WARNING: no Geneformer revision recorded. Set GENEFORMER_REVISION "
-              "before producing a committed provenance record.")
+    resolved = env["geneformer_revision_resolved"]
+    if resolved and resolved != GENEFORMER_REVISION:
+        print(f"  WARNING: cloned Geneformer HEAD {resolved} != pinned "
+              f"{GENEFORMER_REVISION}. `git checkout {GENEFORMER_REVISION}` in the "
+              "clone and reinstall before trusting this run.")
 
     if not args.skip_repair:
         print("\n[1/6] Repairing Geneformer LFS dictionaries + tokenizer patch")

@@ -82,16 +82,35 @@ regenerated offline.
 The committed `data/processed/ensembl_map.csv` is a **different artifact**: built from the
 static **NCBI `gene2ensembl`** reference, 18,459/18,460 (NOX5 the one gap). Coverage counts
 are close; the *identity* of the chosen ENSG per Entrez is not guaranteed to agree
-gene-for-gene. `data-integrity-hashes.md` records 18 Entrez IDs with multiple Ensembl genes
-that the NCBI build resolved by transcript count; `mygene` may have chosen differently for
-some. Any such gene tokenises under a different Geneformer token for BG003082 than the same
-gene did in training.
+gene-for-gene. `data-integrity-hashes.md` records **18** Entrez IDs that NCBI `gene2ensembl`
+maps to more than one Ensembl gene, which the NCBI build resolved by transcript count. That
+**18 is the count of NCBI-side multi-mappings only — it is not a proven upper bound on how
+many genes the two maps disagree on.** `mygene` and NCBI can also pick different primary
+ENSGs for Entrez IDs that are one-to-one in both maps, and nothing in the repo lets us
+enumerate those, because the `mygene` map was never carried back (first paragraph above).
+Any gene where the two maps chose a different ENSG tokenises under a different Geneformer
+token for BG003082 than the same gene did in training.
 
-Magnitude: bounded by ~18 genes plus any one-to-one disagreements, out of ~18k — small, and
-**unquantifiable without the original map**. It must be disclosed wherever a BG003082
-Geneformer prediction is shown next to the training-derived ones. It is not a reason to
-abandon the attempt; it is a reason not to present BG003082's Geneformer output as
-commensurable with the Phase 1 numbers at face value.
+Magnitude: **the complete cross-source identifier-disagreement count is unknown, and is
+unquantifiable without the original `mygene` map.** The 18 NCBI multi-mappings are the only
+disagreements the repo can even point at; the true number of differing ENSG choices could be
+higher or lower. This must be disclosed wherever a BG003082 Geneformer prediction is shown
+next to the training-derived ones. It is not a reason to abandon the attempt; it is a reason
+not to present BG003082's Geneformer output as commensurable with the Phase 1 numbers at
+face value.
+
+### The training-run Geneformer code revision is also unrecorded
+
+The 2026-08-06 Kaggle run cloned `ctheodoris/Geneformer` with no revision argument and
+called `snapshot_download` with no `revision=` (notebook cells 1 and 21). The commit that
+produced the frozen 1,140 embeddings was never captured and **cannot be recovered** from
+this repo or from Kaggle. `capstone/kaggle_bg003082_embedding.py` therefore does **not**
+claim to reproduce it — it pins a **new** verified revision,
+`04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5`, for the BG003082 run only. That commit is the
+current HEAD of `main` (an "Update README.md" commit dated 2026-05-26; repo not gated) and
+predates the 2026-08-06 training run, so it is *probably* the same code Phase 1 used — but
+that is an inference from commit dates, not a verified match, and it does not lift the
+commensurability caveat above.
 
 ---
 
@@ -121,8 +140,14 @@ it:
 
 1. records `sys.version`, platform, and versions of `numpy/pandas/torch/transformers/
    anndata/scanpy/geneformer/huggingface_hub/datasets/scipy`, plus the GPU name;
-2. pins the Geneformer/HF revision via `GENEFORMER_REVISION` (operator fills it from
-   `git -C Geneformer rev-parse HEAD`) and records both the pinned and the resolved commit;
+2. pins the Geneformer/HF revision via `GENEFORMER_REVISION`, set in the script to the
+   verified immutable commit `04c2b2e84da7c0f385c3f9ad8f3ec24bab6650e5` (current HEAD of
+   `ctheodoris/Geneformer` on the Hub, "Update README.md", 2026-05-26, repo not gated) —
+   the *same* revision for the `geneformer` package source, the LFS `.pkl` dictionaries, and
+   the `Geneformer-V2-104M_CLcancer` weight download — and records both the pinned commit
+   and the commit resolved at run time, warning if a cloned checkout's HEAD differs. This is
+   a fresh pin for BG003082, **not** the Phase 1 training revision, which was never recorded
+   (§3);
 3. repairs the LFS `.pkl` stubs and applies the pandas-2 `.iloc[coding_miRNA_loc]` tokenizer
    patch (notebook cells 7–8), recording what was changed;
 4. builds the AnnData through `geneformer_sample_input.build_bg003082_input()` — the same
