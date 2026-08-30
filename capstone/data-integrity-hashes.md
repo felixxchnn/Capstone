@@ -338,3 +338,37 @@ b48c27905d515c23b7cac0dc7b255b473cf70ceb99d793934633e89a39d3b747      85,878  ta
 `StandardScaler` mean exactly; both are kept because imputation is conceptually a distinct,
 earlier step and is needed for an external sample with missing genes. `target_names.json`
 is identical across the two model directories (same 4,297 targets, same order).
+
+### Added with the Phase 2 case study (`case_study.py`)
+
+```
+cbe84b78d1b5e1c77e31436914babc853289604f882b8742ae0a83a8caf9f8a1     168,577  data/processed/case_study.json
+```
+
+**`case_study.json`** — schema `case-study/1`, source commit
+`d6a9b91148c235b1d1215553a3b46b958bc1b212`. One deterministic artifact holding: the ranked
+top-25 predicted CRISPR dependencies from each **reconstructed** frozen Phase 1 model
+(`ridge_pca`, `ridge_head`) for **ACH-000364** (U-2 OS, `val` split, `held_out_prediction` /
+`measured_crispr`) and **BG003082** (Sid Sijbrandij osteosarcoma tumour, absent from every
+DepMap split, `exploratory_external_prediction` / `unavailable`); ACH-000364's observed
+CRISPR values + observed ranks attached **after** ranking (verification example only);
+retrieved drug-gene interaction evidence for the 56 distinct displayed genes from the
+committed offline DGIdb snapshot (8 cited / 8 source-only / 40 none-in-filtered-snapshot,
+65 records, 27 PMIDs); and the locked five-line val-split osteosarcoma descriptive
+aggregate (cohort `ACH-000082, ACH-000364, ACH-002067, ACH-002471, ACH-003178`; 4,255
+common finite targets of 4,297, 42 excluded; mean per-target Spearman `ridge_pca` 0.119436
+vs `ridge_head` 0.082773, Δ −0.036663 — descriptive, unstable at n=5, **not** a replacement
+for the frozen Phase 1 result).
+
+**Deterministic.** `py case_study.py --build` writes byte-identical output on every run
+(fixed-precision floats — predictions 10 dp, aggregate 6 dp; `json.dumps` `sort_keys=True`;
+no wall-clock; no absolute paths). `py case_study.py --validate` regenerates twice,
+byte-compares to the committed file, re-runs 40 structural invariants, and re-checks that
+all protected artifacts are unchanged (43/43). `py case_study.py --self-test` covers the
+ranking direction / tie-break / evidence-status units plus a full offline build.
+
+**Inference provenance.** `case_study.py` imports no scikit-learn and calls no `fit()` /
+`fit_transform()` (AST-checked); all inference is `fitted_artifacts.py` closed-form
+arithmetic on the reconstructed `.npy` arrays, each SHA-256-verified on load. The two models
+are labelled, verbatim, *"reconstructed fitted state at the frozen Phase 1 alpha from the
+unchanged frozen training data"* — not the unavailable historical fitted objects.

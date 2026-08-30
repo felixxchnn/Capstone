@@ -26,8 +26,12 @@ data"* — the identical pipeline re-fit on exactly the committed `train` split,
 **read from** the results files (no re-selection), serialised as plain `.npy` under
 `data/processed/reconstructed_fitted/` and loaded with **no `fit()`** by
 `fitted_artifacts.py`. It reproduces every committed Phase 1 validation statistic exactly
-at the recorded precision, but it is **not** the historical fitted objects. Orchestration
-(`case_study.py`) and the report are still to come. See "Phase 2" below and
+at the recorded precision, but it is **not** the historical fitted objects. `case_study.py`
+orchestrates the two reconstructed models over ACH-000364 (a held-out `val` cell line, used
+as a verification anchor) and BG003082, writing one deterministic
+`data/processed/case_study.json`: per-model top-25 ranked predicted dependencies, retrieved
+drug-gene interaction evidence, and a descriptive five-line osteosarcoma aggregate. The
+offline HTML report (`report.py`) is still to come. See "Phase 2" below and
 `capstone/scope-decisions.md` for the full approved scope.
 
 ## Data and licences
@@ -306,9 +310,12 @@ and disclosed). It is **evidence retrieval, not treatment prediction** — no mo
 inference of efficacy, approval, indication, interaction direction beyond DGIdb's own
 vocabulary, or osteosarcoma relevance; every returned record carries a fixed disclaimer to
 that effect. The 5 pinned build inputs (DGIdb TSVs, HGNC complete set, DGIdb SQL dump) are
-hash-verified but never committed. Still to come: the orchestration (`case_study.py`) with
-its no-leakage and ranking-direction assertions, and the offline HTML report (`report.py`).
-No Phase 1 artifact, split, or committed result is touched by any of this.
+hash-verified but never committed. `case_study.py` now orchestrates the two reconstructed
+models over ACH-000364 and BG003082 into a deterministic `data/processed/case_study.json`
+(top-25 ranked predicted dependencies per model, drug–gene interaction evidence retrieved
+only *after* rankings freeze, and the locked five-line osteosarcoma descriptive aggregate);
+it imports no scikit-learn and calls no `fit()`. Still to come: the offline HTML report
+(`report.py`). No Phase 1 artifact, split, or committed result is touched by any of this.
 
 **Evidence boundaries.** Ranking a predicted CRISPR dependency and citing drug–gene
 interaction evidence for it is not a treatment-efficacy estimate, not a patient-response

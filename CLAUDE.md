@@ -189,7 +189,7 @@ attrition zero.
 
 ## 7. Module map
 
-Eighteen modules today; Phase 2 (§9.7) adds more. Fourteen have been read in full.
+Nineteen modules today; Phase 2 (§9.7) adds more. Fifteen have been read in full.
 
 | Module | Role | Read? |
 |---|---|---|
@@ -206,17 +206,19 @@ Eighteen modules today; Phase 2 (§9.7) adds more. Fourteen have been read in fu
 | `evidence.py` | Phase 2 DGIdb drug–gene interaction **evidence retrieval** (not treatment prediction; no model). `load_snapshot` / `get_evidence_for_gene(entrez_id, symbol=None, top_k=config.TOP_K_EVIDENCE_PER_GENE)` read the committed offline snapshot `data/external/dgidb/dgidb_2026-06b.*` — **no network**, missing snapshot raises rather than querying live. `build_snapshot` (`--refresh` / `--from-staging`) takes **5 pinned inputs** (3 DGIdb `2026-06b` TSVs + the HGNC `2026-06-02` monthly complete set + the DGIdb `2026-06b` SQL dump), gates each on exact size+SHA-256, filters to the 6 redistribution-verified interaction sources (`config.DGIDB_INCLUDED_SOURCES`; CC0/CC-BY/CC-BY-SA/US-Gov-PD only). **Gene identity is an identifier join**: `hgnc:<n>` → HGNC ID → Entrez via the HGNC file (verified 1:1; ambiguous = hard fail), kept iff canonical; symbols are a 3-way consistency check only, never a key. **PMIDs** are recovered by identifier join from the SQL dump (`interaction_claims`→`…_publications`→`publications`), `;`-joined, numerically sorted, deduped — never parsed from free text; empty where DGIdb has none (all ChEMBL/GtoP/FDA). Direction from DGIdb's `interactionClaimTypes.directionality` vocab → inhibitory/activating/unknown. `top_k` enforced per tier; every returned record carries `config.DGIDB_EVIDENCE_DISCLAIMER`. **Both committed files are byte-identical across rebuilds and `--refresh`≡`--from-staging`** — no wall-clock in any tracked output; `config.DGIDB_RETRIEVED_UTC` is the fixed provenance input, per-run times go to the git-ignored `build_runlog.jsonl`. Never commits the unfiltered TSVs, the HGNC file, or the SQL dump. `--self-test` (synthetic, offline; builds a tiny pg_dump `.sql.gz`) and `--validate` (34 checks on the committed snapshot). SQL linkage is reported both per `(gene,drug,source)` **group** (`structural_linkage`, 36,950/36,950) and per **snapshot row** (`row_level_linkage`, 37,343/37,343, 0 unlinked); the two counts differ because 373 groups hold >1 row. | yes (authored) |
 | `reconstruct_fitted.py` | Phase 2 (2026-08-29). Builds **reconstructed** fitted state for the two frozen Phase 1 linear models: re-fits `impute(train-mean) → StandardScaler → PCA(200) → Ridge` (baseline) and `impute → StandardScaler → Ridge` (head) on **exactly the committed `train` split**, at the alpha **read from** `baseline_results.json` / `head_results.json` (100000.0 / 3162.0 — no selection re-run). Serialises plain `.npy` + `manifest.json` under `data/processed/reconstructed_fitted/{baseline_ridge_pca,head_ridge_head}/`. **Not the original Phase 1 objects** (never serialised) — a reproducibility convenience for `case_study.py`. `--build` / `--validate` (reproduces every committed val statistic exactly at 4 dp) / `--check-determinism` (byte-identical rebuild) / `--verify` (13/13 checklist) / `--self-test`. Ten committed inputs gated against their SHA-256 at base commit `12fab80`; refuses to build if any moved. | yes (authored) |
 | `fitted_artifacts.py` | Phase 2 loader for the above. **numpy + stdlib only — no sklearn import, no `fit()` / `fit_transform()`.** `load_baseline_ridge_pca()` / `load_head_ridge()` → objects with `.predict(X)` (closed-form scale → PCA → ridge / scale → ridge), `.assert_feature_order()` / `.assert_target_order()`, `.alpha`. Every `.npy` and label file is SHA-256-verified against the artifact's own `manifest.json` on load; any mismatch / malformed manifest / shape-dtype disagreement hard-fails. | yes (authored) |
+| `case_study.py` | Phase 2 (2026-08-29). Orchestrates the two reconstructed models over **ACH-000364** (U-2 OS, `val`, verification anchor — `held_out_prediction`/`measured_crispr`; observed CRISPR attached *after* ranking, verification only) and **BG003082** (osteosarcoma tumour, absent from every split — `exploratory_external_prediction`/`unavailable`, no observed data). Writes one deterministic `data/processed/case_study.json` (schema `case-study/1`): top-25 ranked predicted dependencies per model per sample (ascending predicted GeneEffect = stronger dependency, numeric-Entrez tie-break), drug-gene interaction evidence for the displayed genes (`evidence.get_evidence_for_gene`, retrieved **after** rankings freeze), and the locked five-line osteosarcoma descriptive aggregate. **Imports no sklearn, calls no `fit()`/`fit_transform()`, never imports `reconstruct_fitted`** (AST-checked); inference is `fitted_artifacts` only. `baseline.per_target_spearman` (pure numpy/scipy) is the sole `baseline` use, for the mandated osteosarcoma metric. `--build` / `--validate` (43/43, byte-identical regen ×2, protected artifacts unchanged) / `--self-test`. | yes (authored) |
 | `splits.py` | Patient-grouped, lineage-stratified split generation | no |
 | `checks.py` | Integrity assertions; fails the run on group straddling; 8 sections including PRISM and osteosarcoma coverage | yes |
 | `make_fixture.py` | Synthetic fixture generation mirroring real DepMap file structure, including a synthetic Bone/Osteosarcoma subset and a synthetic PRISM matrix | yes |
 | `run_geneformer_embeddings.py` | Embedding extraction; ran on Kaggle | no |
 | `inspect_data.py` | Ad-hoc inspection, three hard-coded raw filenames read via bare `pd.read_csv`, not `config.resolve_file`/`RAW_DIR`. Unrunnable from a clone (raw CSVs gitignored) even before that. Ship-or-cut undecided. | yes |
 
-**`data/processed`** holds 18 tracked files directly: the 15 Phase 1 artifacts, plus
+**`data/processed`** holds 19 tracked files directly: the 15 Phase 1 artifacts, plus
 `ensembl_map.csv` (added `d78fbf8`), plus the Phase 2 BG003082 Geneformer sidecar
 `geneformer_bg003082_embedding.csv` + `geneformer_bg003082_embedding.provenance.json` (added
-2026-08-29, Kaggle run). The sidecar is a `1 × 768` external-sample embedding, **not** part of
-the frozen `geneformer_embeddings.csv` (1,140 × 768), which is untouched.
+2026-08-29, Kaggle run), plus `case_study.json` (added 2026-08-29). The sidecar is a
+`1 × 768` external-sample embedding, **not** part of the frozen `geneformer_embeddings.csv`
+(1,140 × 768), which is untouched.
 Plus the `reconstructed_fitted/` subtree (added 2026-08-29): `baseline_ridge_pca/` (14 files)
 and `head_ridge_head/` (9 files), ~61 MiB of plain `.npy` + `manifest.json` — reconstructed
 fitted state for `case_study.py`, **not** the original Phase 1 fitted objects. Hashes and the
@@ -445,13 +447,19 @@ at the alpha read from the results JSONs, serialised as plain `.npy` under
 `data/processed/reconstructed_fitted/`, loaded with **no `fit()`**. Reproduces every
 committed Phase 1 val statistic exactly at 4 dp (`--validate`); byte-identical rebuild
 (`--check-determinism`); `--verify` 13/13; `--self-test` green. They are **not** the
-historical fitted objects and change no Phase 1 result. The five-line val-split
-osteosarcoma aggregate is **fully defined** in `capstone/scope-decisions.md` (2026-08-29
-entry) but **not yet computed**.
+historical fitted objects and change no Phase 1 result.
 
-Still to build: `case_study.py` (orchestration — loads `fitted_artifacts`, no fit; no-leakage
-/ ranking-direction assertions; the now-defined osteosarcoma-aggregate stat), `report.py`
-(offline HTML), and `checks.py` reconciliation/evidence sections.
+**`case_study.py` and `data/processed/case_study.json` now exist** (2026-08-29, schema
+`case-study/1`, sha256 `cbe84b78…`, 168,577 B). It orchestrates the two reconstructed
+models over ACH-000364 (`val` anchor) and BG003082 (external, absent from all splits),
+producing per-model top-25 ranked predicted dependencies, drug-gene interaction evidence
+for the 56 displayed genes (8 cited / 8 source-only / 40 none), and the locked five-line
+osteosarcoma aggregate (mean per-target Spearman `ridge_pca` 0.119436 vs `ridge_head`
+0.082773 over 4,255 common targets; Δ −0.036663; descriptive, unstable at n=5, **not** a
+replacement for the frozen Phase 1 result). `--validate` 43/43, byte-identical regen.
+
+Still to build: `report.py` (offline HTML over `case_study.json`) and `checks.py`
+reconciliation/evidence sections.
 
 ---
 
