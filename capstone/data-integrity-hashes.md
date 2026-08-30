@@ -385,3 +385,34 @@ ranking direction / tie-break / evidence-status units plus a full offline build.
 arithmetic on the reconstructed `.npy` arrays, each SHA-256-verified on load. The two models
 are labelled, verbatim, *"reconstructed fitted state at the frozen Phase 1 alpha from the
 unchanged frozen training data"* — not the unavailable historical fitted objects.
+
+### Added with the offline HTML report (`report.py`)
+
+```
+f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163     339,626  phase2_report.html
+```
+
+**`phase2_report.html`** — one self-contained offline HTML rendering of
+`data/processed/case_study.json` (schema `phase2-report/1`). `.gitattributes` marks it
+`-text` so the SHA-256 survives a clone byte-exact on any platform. `py report.py --build`
+writes it; **`py report.py --build` twice is byte-identical**; `py report.py --validate`
+(25 structural checks) regenerates twice and byte-compares, verifies the embedded
+`case_study.json` round-trips and equals the hash-pinned committed file, checks every
+required section / headline string / warning, the 4 sample·model views with 25 rows each,
+evidence-count reconciliation, ID uniqueness, internal control targets, `</script>`
+escaping, no remote script/style/font/analytics dependency, no absolute path, no wall-clock,
+and runs a headless-browser interaction smoke test (Chrome, already installed — no new
+dependency) driving the sample/model selectors, search, evidence-status filter and
+expand/collapse.
+
+**What `report.py` does NOT do.** No model inference, no evidence lookup, no scientific
+recomputation. It reads only committed, hash-pinned artifacts: `case_study.json`
+(`a962c01a…`), `baseline_results.json` / `head_results.json` / `analysis_results.json` (for
+the section-B Phase 1 headline — read from the files, asserted against expected values,
+never typed blind), and the DGIdb `manifest.json` (`9fb585c7…`, for the release / vintage /
+licence / ~19% publication-coverage facts). CSS and JavaScript are embedded locally; the
+only outward references are optional `<a href>` links to PubMed / source / licence pages,
+and the report is complete and readable with no internet access.
+
+**Offline viewing.** Open `phase2_report.html` directly in any modern browser
+(double-click, or `file://` URL). No server, no build step, no network.

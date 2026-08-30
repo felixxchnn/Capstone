@@ -3,3 +3,7 @@
 # verifiable after a clone on any platform.
 data/processed/** -text
 data/external/** -text
+
+# The Phase 2 offline HTML report is a committed deliverable whose SHA-256 is
+# recorded and must reproduce byte-for-byte after a clone on any platform.
+phase2_report.html -text

@@ -407,6 +407,13 @@ RECONSTRUCTED_FITTED_DIR = PROCESSED_DIR / "reconstructed_fitted"
 TOP_N_DEPENDENCIES = 25     # genes shown per sample in the ranked-dependency table
 TOP_K_EVIDENCE_PER_GENE = 5  # interaction records shown per gene, per direction tier
 
+# Phase 2 case-study JSON (written by case_study.py) and the self-contained
+# offline HTML report rendered from it (written by report.py). The HTML is a
+# committed deliverable; `.gitattributes` marks it `-text` so its SHA-256
+# survives a clone byte-exact on any platform.
+CASE_STUDY_JSON_FILE = PROCESSED_DIR / "case_study.json"
+REPORT_HTML_FILE = PROJECT_ROOT / "phase2_report.html"
+
 # --------------------------------------------------------------------------
 # Phase 2 -- DGIdb drug-gene interaction *evidence retrieval* layer
 # (evidence.py). This is cited-interaction retrieval, NOT drug-response

@@ -30,9 +30,10 @@ at the recorded precision, but it is **not** the historical fitted objects. `cas
 orchestrates the two reconstructed models over ACH-000364 (a held-out `val` cell line, used
 as a verification anchor) and BG003082, writing one deterministic
 `data/processed/case_study.json`: per-model top-25 ranked predicted dependencies, retrieved
-drug-gene interaction evidence, and a descriptive five-line osteosarcoma aggregate. The
-offline HTML report (`report.py`) is still to come. See "Phase 2" below and
-`capstone/scope-decisions.md` for the full approved scope.
+drug-gene interaction evidence, and a descriptive five-line osteosarcoma aggregate.
+`report.py` renders that JSON into one self-contained **`phase2_report.html`** — no
+inference, no network, no CDN; **open it in any browser (double-click, or a `file://`
+URL)**. See "Phase 2" below and `capstone/scope-decisions.md` for the full approved scope.
 
 ## Data and licences
 
@@ -314,8 +315,14 @@ hash-verified but never committed. `case_study.py` now orchestrates the two reco
 models over ACH-000364 and BG003082 into a deterministic `data/processed/case_study.json`
 (top-25 ranked predicted dependencies per model, drug–gene interaction evidence retrieved
 only *after* rankings freeze, and the locked five-line osteosarcoma descriptive aggregate);
-it imports no scikit-learn and calls no `fit()`. Still to come: the offline HTML report
-(`report.py`). No Phase 1 artifact, split, or committed result is touched by any of this.
+it imports no scikit-learn and calls no `fit()`. `report.py` renders that JSON into
+**`phase2_report.html`**, a single self-contained offline page (embedded CSS/JS, no CDN, no
+network, byte-identical rebuild): frozen Phase 1 result, sample/model selectors (the two
+model rankings are never merged), 25-row ranked-dependency tables with expandable
+drug–gene interaction evidence, the osteosarcoma descriptive aggregate, and collapsible
+methods/provenance/limitations. **View it by opening `phase2_report.html` in a browser
+(double-click or `file://`)** — no server, no build step, no internet. No Phase 1 artifact,
+split, or committed result is touched by any of this.
 
 **Evidence boundaries.** Ranking a predicted CRISPR dependency and citing drug–gene
 interaction evidence for it is not a treatment-efficacy estimate, not a patient-response

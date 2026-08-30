@@ -189,7 +189,7 @@ attrition zero.
 
 ## 7. Module map
 
-Nineteen modules today; Phase 2 (§9.7) adds more. Fifteen have been read in full.
+Twenty modules today; Phase 2 (§9.7) adds more. Sixteen have been read in full.
 
 | Module | Role | Read? |
 |---|---|---|
@@ -207,6 +207,7 @@ Nineteen modules today; Phase 2 (§9.7) adds more. Fifteen have been read in ful
 | `reconstruct_fitted.py` | Phase 2 (2026-08-29). Builds **reconstructed** fitted state for the two frozen Phase 1 linear models: re-fits `impute(train-mean) → StandardScaler → PCA(200) → Ridge` (baseline) and `impute → StandardScaler → Ridge` (head) on **exactly the committed `train` split**, at the alpha **read from** `baseline_results.json` / `head_results.json` (100000.0 / 3162.0 — no selection re-run). Serialises plain `.npy` + `manifest.json` under `data/processed/reconstructed_fitted/{baseline_ridge_pca,head_ridge_head}/`. **Not the original Phase 1 objects** (never serialised) — a reproducibility convenience for `case_study.py`. `--build` / `--validate` (reproduces every committed val statistic exactly at 4 dp) / `--check-determinism` (byte-identical rebuild) / `--verify` (13/13 checklist) / `--self-test`. Ten committed inputs gated against their SHA-256 at base commit `12fab80`; refuses to build if any moved. | yes (authored) |
 | `fitted_artifacts.py` | Phase 2 loader for the above. **numpy + stdlib only — no sklearn import, no `fit()` / `fit_transform()`.** `load_baseline_ridge_pca()` / `load_head_ridge()` → objects with `.predict(X)` (closed-form scale → PCA → ridge / scale → ridge), `.assert_feature_order()` / `.assert_target_order()`, `.alpha`. Every `.npy` and label file is SHA-256-verified against the artifact's own `manifest.json` on load; any mismatch / malformed manifest / shape-dtype disagreement hard-fails. | yes (authored) |
 | `case_study.py` | Phase 2 (2026-08-29). Orchestrates the two reconstructed models over **ACH-000364** (U-2 OS, `val`, verification anchor — `held_out_prediction`/`measured_crispr`; observed CRISPR attached *after* ranking, verification only) and **BG003082** (osteosarcoma tumour, absent from every split — `exploratory_external_prediction`/`unavailable`, no observed data). Writes one deterministic `data/processed/case_study.json` (schema `case-study/1`): top-25 ranked predicted dependencies per model per sample (ascending predicted GeneEffect = stronger dependency, numeric-Entrez tie-break), drug-gene interaction evidence for the displayed genes (`evidence.get_evidence_for_gene`, retrieved **after** rankings freeze), and the locked five-line osteosarcoma descriptive aggregate. **Imports no sklearn, calls no `fit()`/`fit_transform()`, never imports `reconstruct_fitted`** (AST-checked); inference is `fitted_artifacts` only. `baseline.per_target_spearman` (pure numpy/scipy) is the sole `baseline` use, for the mandated osteosarcoma metric. `--build` / `--validate` (43/43, byte-identical regen ×2, protected artifacts unchanged) / `--self-test`. | yes (authored) |
+| `report.py` | Phase 2 (2026-08-29). Renders the committed `case_study.json` into one self-contained offline **`phase2_report.html`** (schema `phase2-report/1`, repo root, `.gitattributes` `-text`). **No inference, no evidence lookup, no recomputation** — reads only hash-pinned committed artifacts (`case_study.json`, `baseline_results.json`/`head_results.json`/`analysis_results.json` for the section-B Phase 1 headline, DGIdb `manifest.json` for release/vintage/licence/~19%-coverage facts). CSS + JS embedded locally; no CDN / remote font / analytics; opens from `file://`; byte-identical rebuild; no wall-clock, no absolute path. Sections A–I: header + "Research demonstration — not clinical guidance", frozen Phase 1 result, sample/model selectors (ridge_pca and ridge_head never merged), 25-row ranked dependency tables (observed cols only for ACH-000364), expandable "Drug–gene interaction evidence" grouped under each gene, sample interpretation, osteosarcoma descriptive aggregate, collapsible methods/provenance/limitations. `--build` / `--validate` (25 structural checks + headless-Chrome interaction smoke: selectors/search/filter/expand) / `--self-test`. Claim-language gate hard-fails on prohibited framing in rendered prose. | yes (authored) |
 | `splits.py` | Patient-grouped, lineage-stratified split generation | no |
 | `checks.py` | Integrity assertions; fails the run on group straddling; 8 sections including PRISM and osteosarcoma coverage | yes |
 | `make_fixture.py` | Synthetic fixture generation mirroring real DepMap file structure, including a synthetic Bone/Osteosarcoma subset and a synthetic PRISM matrix | yes |
@@ -460,8 +461,13 @@ osteosarcoma aggregate (mean per-target Spearman `ridge_pca` 0.119436 vs `ridge_
 0.082773 over 4,255 common targets; Δ −0.036663; descriptive, unstable at n=5, **not** a
 replacement for the frozen Phase 1 result). `--validate` 43/43, byte-identical regen.
 
-Still to build: `report.py` (offline HTML over `case_study.json`) and `checks.py`
-reconciliation/evidence sections.
+**`report.py` and `phase2_report.html` now exist** (2026-08-29, sha256 `f4a093b0…`,
+339,626 B). Self-contained offline HTML rendered from `case_study.json` — no inference /
+evidence lookup / recomputation, no CDN or network, byte-identical rebuild, headless-Chrome
+interaction smoke test green. **To view: open `phase2_report.html` in any modern browser
+(double-click, or a `file://` URL) — no server, no build step, no network.**
+
+Still to build: the `checks.py` reconciliation/evidence sections.
 
 ---
 
