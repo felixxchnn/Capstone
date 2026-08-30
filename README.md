@@ -12,28 +12,38 @@ quantified negative result, not a failed experiment. See "Reading the results" b
 `data/processed/{baseline_results,head_results,analysis_results}.json` for every number and
 its provenance.
 
-**Phase 2 (approved scope, in progress):** a proof-of-concept application layer that
-uses Phase 1's frozen models to rank predicted CRISPR dependencies for two samples and
-connects the top-ranked genes to cited drug–gene interaction evidence. Committed so far:
-the external inputs (`data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz`,
-`data/processed/ensembl_map.csv`), the external-sample loader (`sample_profile.py`), the
-BG003082 Geneformer sidecar embedding, the offline licence-filtered DGIdb evidence snapshot
-(`evidence.py`), and **reconstructed fitted state** for the two frozen Phase 1 linear
-models. The last of these needs a word of honesty: the original Phase 1 `StandardScaler` /
-`PCA` / `Ridge` objects were never serialised, so `reconstruct_fitted.py` writes
-*"reconstructed fitted state at the frozen Phase 1 alpha from the unchanged frozen training
-data"* — the identical pipeline re-fit on exactly the committed `train` split, at the alpha
-**read from** the results files (no re-selection), serialised as plain `.npy` under
+**Phase 2 (approved application layer — implemented and validated):** a proof-of-concept
+application layer that uses Phase 1's frozen models to rank predicted CRISPR dependencies
+for two samples and connects the top-ranked genes to cited drug–gene interaction evidence.
+Implemented components: the external inputs
+(`data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz`, `data/processed/ensembl_map.csv`),
+the external-sample loader (`sample_profile.py`), the BG003082 Geneformer sidecar embedding,
+the offline licence-filtered DGIdb evidence snapshot (`evidence.py`), **reconstructed fitted
+state** for the two frozen Phase 1 linear models (`reconstruct_fitted.py` /
+`fitted_artifacts.py`), the case-study orchestrator (`case_study.py` →
+`data/processed/case_study.json`), the offline report (`report.py` → `phase2_report.html`),
+and repository-wide integrity coverage (`checks.py` sections 9–12). The reconstructed fitted
+state needs a word of honesty: the original Phase 1 `StandardScaler` / `PCA` / `Ridge`
+objects were never serialised, so `reconstruct_fitted.py` writes *"reconstructed fitted
+state at the frozen Phase 1 alpha from the unchanged frozen training data"* — the identical
+pipeline re-fit on exactly the committed `train` split, at the alpha **read from** the
+results files (no re-selection), serialised as plain `.npy` under
 `data/processed/reconstructed_fitted/` and loaded with **no `fit()`** by
-`fitted_artifacts.py`. It reproduces every committed Phase 1 validation statistic exactly
-at the recorded precision, but it is **not** the historical fitted objects. `case_study.py`
+`fitted_artifacts.py`. It reproduces every committed Phase 1 validation statistic exactly at
+the recorded precision, but it is **not** the historical fitted objects. `case_study.py`
 orchestrates the two reconstructed models over ACH-000364 (a held-out `val` cell line, used
-as a verification anchor) and BG003082, writing one deterministic
+as a verification anchor) and BG003082 — a real primary-tumour sample that stays
+**exploratory**, has **no measured CRISPR outcome**, and is a real domain shift from the
+cultured cell lines the model was trained and validated on — writing one deterministic
 `data/processed/case_study.json`: per-model top-25 ranked predicted dependencies, retrieved
-drug-gene interaction evidence, and a descriptive five-line osteosarcoma aggregate.
-`report.py` renders that JSON into one self-contained **`phase2_report.html`** — no
-inference, no network, no CDN; **open it in any browser (double-click, or a `file://`
-URL)**. See "Phase 2" below and `capstone/scope-decisions.md` for the full approved scope.
+drug–gene interaction evidence (**retrieval of cited records, not treatment prediction**),
+and a descriptive five-line osteosarcoma aggregate. `report.py` renders that JSON into one
+self-contained **`phase2_report.html`** — no inference, no network, no CDN; **open it in any
+browser (double-click, or a `file://` URL)**. The project makes **no clinical or efficacy
+claim**. This is the Phase 2 application layer only; the overall capstone still has separate
+work outstanding — the E1 random-projection control, the written model-set freeze, the
+one-time final test-split evaluation, and presentation preparation. See "Phase 2" below and
+`capstone/scope-decisions.md` for the full approved scope.
 
 ## Data and licences
 
@@ -264,7 +274,7 @@ than the `0.0` `map_external_matrix` would fill.
 
 ---
 
-## Phase 2 — proof-of-concept demo (approved scope, in progress)
+## Phase 2 — proof-of-concept demo (approved application layer, implemented and validated)
 
 The October deliverable also includes a proof-of-concept application layer: using Phase 1's
 frozen models to rank predicted CRISPR dependencies for two samples, then connecting the
@@ -285,8 +295,9 @@ Two samples, two different, explicitly labeled roles:
   CRISPR screen exists for this tissue, and bulk tumor tissue is a real domain shift from the
   cultured cell lines the model was trained and validated on.
 
-**Status.** Committed so far: `data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz` (the
-external RNA-seq sample) and `data/processed/ensembl_map.csv` (Entrez↔Ensembl, from NCBI
+**Status — the approved Phase 2 application layer is implemented and validated.** Committed:
+`data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz` (the external RNA-seq sample) and
+`data/processed/ensembl_map.csv` (Entrez↔Ensembl, from NCBI
 `gene2ensembl`). `sample_profile.py` — the loader that reads the GCT, validates it against
 the GCT v1.2 schema, reconciles its versioned Ensembl IDs to the frozen canonical gene space
 by Ensembl-ID join, and reports every reconciliation count — is implemented and validated

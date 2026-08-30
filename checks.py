@@ -112,8 +112,11 @@ def _section(title: str) -> None:
 # Standalone helpers, deliberately independent of the Phase 1 loaders above.
 # Every Phase 2 check is fail-closed: a missing file, a hash mismatch, or an
 # exception in the check body is a hard [FAIL] with a readable reason, never a
-# skip and never a fabricated pass. Nothing in this block reads, evaluates, or
-# reports the held-out test split.
+# skip and never a fabricated pass. This block reads splits.json assignment
+# labels only, for split-integrity and sample-role assertions; it loads no
+# test-split expression features for inference, no test CRISPR outcomes for
+# evaluation, and computes or reports no test predictions, rankings, metrics,
+# or performance results.
 # --------------------------------------------------------------------------
 
 _HASH_CHUNK = 1 << 20

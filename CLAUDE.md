@@ -1,8 +1,11 @@
 # CLAUDE.md
 
 Operating instructions for Claude Code in this repository. Read this before touching
-anything. Last updated 2026-08-27 at commit `9716f08`, plus the uncommitted Phase 2
-external-sample loader (`sample_profile.py`, §7, §9.7) landing in the next commit.
+anything. Last updated 2026-08-30. Phase 1 is validated, and the approved Phase 2
+application layer is implemented and integrated into the repository-wide integrity checks:
+`sample_profile.py`, `evidence.py`, `reconstruct_fitted.py`, `fitted_artifacts.py`,
+`case_study.py`, `report.py`, and `checks.py` sections 9–12 are all committed. Nothing in
+§7 or §9.7 is still pending as an uncommitted file.
 
 ---
 
@@ -494,10 +497,16 @@ Public 26Q1 + the two named Phase 2 samples), the prediction target (per-target 
 effect), the frozen models (`ridge_pca` α 100000, `ridge_head` α 3162 — reconstructed fitted
 state, read not re-selected), the metric (per-target Spearman), the sample roles
 (`ACH-000364` held_out_prediction / measured_crispr; `BG003082`
-exploratory_external_prediction / unavailable), the offline-report deliverable, the
-prohibition on test-split evaluation (the test split was not read, evaluated, or reported),
-and every Phase 1 artifact, result, and committed hash. `capstone/scope-decisions.md` is
-unchanged — this task approves no scope change.
+exploratory_external_prediction / unavailable), the offline-report deliverable, and every
+Phase 1 artifact, result, and committed hash. `capstone/scope-decisions.md` is unchanged —
+this task approves no scope change.
+
+**Test-split discipline — precise statement.** `checks.py` reads `splits.json`
+split-assignment labels for split-integrity assertions and to confirm the two Phase 2
+sample roles. Beyond those label reads: no test-split expression features were loaded for
+model inference; no test CRISPR outcomes were loaded for evaluation; no test predictions,
+rankings, metrics, or performance results were computed or reported; and no model or
+hyperparameter decision was made using test data.
 
 ---
 
