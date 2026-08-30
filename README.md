@@ -63,7 +63,7 @@ Put the three DepMap CSVs in `data/raw/` (or set `DEPMAP_DATA_DIR`), then:
 ```bash
 python build_dataset.py     # join, filter, freeze the gene space
 python splits.py            # leakage-safe train/val/test
-python checks.py            # 30+ integrity assertions
+python checks.py            # 55 fail-closed integrity checks (32 dataset + 23 Phase 2)
 python baseline.py          # the number to beat
 ```
 
@@ -130,14 +130,18 @@ independently of the code that built the file.
 | `gene_ids.py` | Parses `SYMBOL (ENTREZ)`, reconciles gene spaces, maps external data in. |
 | `build_dataset.py` | The join. Writes matrices + a full audit report. |
 | `splits.py` | Patient-grouped, lineage-stratified split. Frozen to disk. |
-| `checks.py` | Independent integrity assertions. Run after any change. |
+| `checks.py` | Independent integrity assertions. Run after any change. **55 fail-closed checks**: sections 1–8 are the original 32 dataset-integrity assertions (unchanged); sections 9–12 add the Phase 2 application-layer loop — committed-artifact identity, sample reconciliation and leakage prevention, ranking/evidence consistency, and offline-report integrity. |
 | `baseline.py` | Global mean → lineage mean → ridge on PCA of expression. |
 | `train_head.py` | Ridge / MLP heads on frozen Geneformer embeddings. |
 | `analysis.py` | Bootstrap CI, paired per-target comparison, effective degrees of freedom. |
 | `make_fixture.py` | Synthetic data mirroring the real formats. |
 | `sample_profile.py` | Phase 2. Loads an external RNA-seq GCT (currently `BG003082`) into the frozen canonical gene space via Ensembl-ID join, with full reconciliation provenance. |
 | `geneformer_sample_input.py` | Phase 2. Builds validated Geneformer-input frames for `BG003082` from the committed GCT + `ensembl_map.csv` (no GPU/network); the Kaggle GPU half produced the committed `geneformer_bg003082_embedding.csv` sidecar. |
-| `evidence.py` | Phase 2. Offline, licence-filtered DGIdb drug–gene interaction **evidence retrieval** (no model, no efficacy inference). `load_snapshot()` / `get_evidence_for_gene()` read a committed, deterministic snapshot; `--refresh` / `--from-staging` rebuild it byte-identically from 5 pinned inputs (DGIdb `2026-06b` TSVs + HGNC `2026-06-02` + the DGIdb SQL dump). Gene identity is an HGNC-ID→Entrez join; `pmids` come from the SQL dump by identifier join, never free text. |
+| `evidence.py` | Phase 2. Offline, licence-filtered DGIdb drug–gene interaction **evidence retrieval** (no model, no efficacy inference). `load_snapshot()` / `get_evidence_for_gene()` read a committed, deterministic snapshot; `--refresh` / `--from-staging` rebuild it byte-identically from 5 pinned inputs (DGIdb `2026-06b` TSVs + HGNC `2026-06-02` + the DGIdb SQL dump). Gene identity is an HGNC-ID→Entrez join; `pmids` come from the SQL dump by identifier join, never free text. `--validate` runs 34 offline snapshot checks. |
+| `reconstruct_fitted.py` | Phase 2. Re-fits the identical `impute → StandardScaler → PCA(200) → Ridge` (baseline) and `impute → StandardScaler → Ridge` (head) pipelines on **exactly the committed `train` split** at the alpha **read from** the results JSONs, and serialises plain `.npy` + `manifest.json` under `data/processed/reconstructed_fitted/`. **Reconstructed fitted state, not the unavailable original Phase 1 objects.** `--validate` reproduces every committed val statistic at 4 dp; `--check-determinism` rebuilds byte-identically. |
+| `fitted_artifacts.py` | Phase 2. Loads the reconstructed fitted state with **numpy + stdlib only — no sklearn, no `fit()`**. Closed-form `predict(X)`; every `.npy` SHA-256-verified against the manifest on load. |
+| `case_study.py` | Phase 2. Orchestrates the two reconstructed models over `ACH-000364` (val anchor) and `BG003082` (external) into one deterministic `data/processed/case_study.json`: top-25 ranked predicted dependencies per model per sample, drug–gene interaction evidence for the displayed genes (retrieved **after** rankings freeze), and the locked five-line osteosarcoma descriptive aggregate. Imports no sklearn; writes explicit CRLF bytes and stamps the frozen reconstruction environment so regeneration is byte-identical on any OS. `--validate` = 43 checks. |
+| `report.py` | Phase 2. Renders the committed `case_study.json` into one self-contained offline **`phase2_report.html`** — no inference, no evidence lookup, no network/CDN. `--validate` = 25 structural checks + a headless-Chrome interaction smoke test when a browser is present. |
 
 `prepare_geneformer_input.py` and `run_geneformer_embeddings.py` produced
 `data/processed/geneformer_embeddings.csv`, but ran on Kaggle and are not
@@ -165,8 +169,9 @@ Written to `data/processed/`:
 - `analysis_results.json` — bootstrap CI, paired comparison, effective df (`analysis.py`)
 - `ensembl_map.csv` — Phase 2. Entrez↔Ensembl cross-reference (NCBI `gene2ensembl`), 18,459/18,460 canonical genes (`NOX5` has no NCBI Ensembl xref). Consumed by `prepare_geneformer_input.py` and `sample_profile.py`.
 - `geneformer_bg003082_embedding.csv` / `.provenance.json` — Phase 2. The 1 × 768 Geneformer CLS embedding for the external `BG003082` tumor sample, from the Kaggle GPU run (`kaggle_bg003082_embedding.py`). A separate exploratory sidecar; the frozen `geneformer_embeddings.csv` is unchanged.
+- `case_study.json` — Phase 2. The deterministic case-study artifact written by `case_study.py` (schema `case-study/1`). Committed; SHA-256 `a962c01a…`, byte-identical on any OS. Plus the `reconstructed_fitted/` subtree (reconstructed fitted state for the two frozen linear models).
 
-18 files are tracked in `data/processed/`. `join_report.txt` is methods-section material. "We intersected three DepMap
+19 files are tracked directly in `data/processed/` (plus the `reconstructed_fitted/` subtree). `join_report.txt` is methods-section material. "We intersected three DepMap
 tables, reconciled 18,463 genes across two matrices by Entrez ID, and retained
 4,297 selective dependencies" is real provenance, and it's already written for you.
 
@@ -323,6 +328,20 @@ drug–gene interaction evidence, the osteosarcoma descriptive aggregate, and co
 methods/provenance/limitations. **View it by opening `phase2_report.html` in a browser
 (double-click or `file://`)** — no server, no build step, no internet. No Phase 1 artifact,
 split, or committed result is touched by any of this.
+
+**The Phase 2 application layer is now integrated into `checks.py`.** `py checks.py` runs
+**55 fail-closed checks**: the original 32 dataset-integrity assertions (sections 1–8,
+unchanged) plus sections 9–12, which close the validation loop end to end — committed
+Phase 2 artifact identity and SHA-256 (`case_study.json`, `phase2_report.html`, the DGIdb
+snapshot/manifest, the BG003082 GCT, `ensembl_map.csv`); sample reconciliation and
+leakage prevention (`ACH-000364`/`BG003082` roles, a fresh `sample_profile` load compared
+byte-for-byte against the committed reconciliation, the 18,427 + 33 = 18,460 counts, no
+symbol fallback); ranking and evidence consistency (`case_study.validate`,
+`evidence.validate_snapshot`, coverage reconciliation, tier/source/disclaimer vocabulary,
+cross-checked hashes); and offline-report integrity (`report.validate`, the embedded JSON
+equals the committed `case_study.json`, no remote runtime dependency, the fixed
+non-efficacy disclaimer present). A missing file or a hash mismatch is a hard failure,
+never a skip.
 
 **Evidence boundaries.** Ranking a predicted CRISPR dependency and citing drug–gene
 interaction evidence for it is not a treatment-efficacy estimate, not a patient-response

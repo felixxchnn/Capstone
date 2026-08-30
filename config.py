@@ -414,6 +414,24 @@ TOP_K_EVIDENCE_PER_GENE = 5  # interaction records shown per gene, per direction
 CASE_STUDY_JSON_FILE = PROCESSED_DIR / "case_study.json"
 REPORT_HTML_FILE = PROJECT_ROOT / "phase2_report.html"
 
+# Schema identifiers stamped into the two Phase 2 deliverables. Centralised here
+# so case_study.py, report.py and checks.py agree on one source of truth.
+CASE_STUDY_SCHEMA_VERSION = "case-study/1"
+REPORT_SCHEMA_VERSION = "phase2-report/1"
+
+# Approved SHA-256 of the two committed Phase 2 deliverables. Both regenerate
+# byte-identically on any platform (case_study.py writes explicit CRLF bytes and
+# stamps the frozen reconstruction environment, not the runtime one; report.py
+# writes explicit LF). checks.py sections 9 and 12 gate the committed bytes
+# against these; a change here is a deliberate, reviewed re-approval, never a
+# side effect of an edit.
+CASE_STUDY_JSON_SHA256 = (
+    "a962c01a5b65a6ef579ea57dced67048bf9016ba0f66aab2355cf1f054796e8c"
+)
+REPORT_HTML_SHA256 = (
+    "f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163"
+)
+
 # --------------------------------------------------------------------------
 # Phase 2 -- DGIdb drug-gene interaction *evidence retrieval* layer
 # (evidence.py). This is cited-interaction retrieval, NOT drug-response

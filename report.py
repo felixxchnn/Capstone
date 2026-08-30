@@ -45,11 +45,11 @@ from pathlib import Path
 
 import config
 
-REPORT_SCHEMA = "phase2-report/1"
-CASE_STUDY_SCHEMA_EXPECTED = "case-study/1"
+REPORT_SCHEMA = config.REPORT_SCHEMA_VERSION
+CASE_STUDY_SCHEMA_EXPECTED = config.CASE_STUDY_SCHEMA_VERSION
 
 # ---- hash-pinned committed inputs (verified at every build) --------------
-CASE_STUDY_SHA256 = "a962c01a5b65a6ef579ea57dced67048bf9016ba0f66aab2355cf1f054796e8c"
+CASE_STUDY_SHA256 = config.CASE_STUDY_JSON_SHA256
 RESULT_ARTIFACT_SHA256 = {
     "baseline_results.json":
         "b49169bd363a596f400b4faff8c21d354275b70404efe08b9109d38f1bdc0ffd",

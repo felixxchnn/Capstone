@@ -24,13 +24,25 @@ rather than against the steps that produced it.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 import config
 import io_utils
+
+# Phase 2 application layer (sections 9-12). Imported at module load, like
+# every other dependency here: if one of these cannot import, checks.py must
+# not run at all rather than silently skip its own integrity gate.
+import case_study
+import evidence
+import report
+import sample_profile
 
 
 class CheckResult:
@@ -65,11 +77,12 @@ class CheckResult:
         return condition
 
     def summary(self) -> int:
+        total = len(self.passed) + len(self.failed)
         print()
         print("=" * 74)
-        print(f"  passed   : {len(self.passed)}")
-        print(f"  warnings : {len(self.warnings)}")
-        print(f"  failed   : {len(self.failed)}")
+        print(f"  {len(self.passed)}/{total} checks passed")
+        print(f"  {len(self.warnings)} warnings")
+        print(f"  {len(self.failed)} failures")
         print("=" * 74)
 
         if self.warnings:
@@ -91,6 +104,362 @@ class CheckResult:
 def _section(title: str) -> None:
     print(f"\n{title}")
     print("-" * 74)
+
+
+# --------------------------------------------------------------------------
+# Phase 2 application-layer integrity  (sections 9-12)
+#
+# Standalone helpers, deliberately independent of the Phase 1 loaders above.
+# Every Phase 2 check is fail-closed: a missing file, a hash mismatch, or an
+# exception in the check body is a hard [FAIL] with a readable reason, never a
+# skip and never a fabricated pass. Nothing in this block reads, evaluates, or
+# reports the held-out test split.
+# --------------------------------------------------------------------------
+
+_HASH_CHUNK = 1 << 20
+
+
+def _sha256_file(path) -> str:
+    """SHA-256 of a file, read in 1 MiB chunks (matches the project hash table)."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(_HASH_CHUNK), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _reject_json_constant(token: str):
+    """json.loads parse_constant hook: NaN / Infinity / -Infinity are forbidden."""
+    raise ValueError(f"non-standard JSON constant {token!r} is not allowed here")
+
+
+def _load_strict_json(path):
+    """Load JSON, hard-failing on any NaN / Infinity / -Infinity literal."""
+    text = Path(path).read_text(encoding="utf-8")
+    return json.loads(text, parse_constant=_reject_json_constant)
+
+
+def _phase2_application_checks(result: "CheckResult") -> None:
+    """
+    Sections 9-12: close the validation loop across the dataset, the
+    reconstructed models, the Phase 2 case study, the drug-gene evidence
+    snapshot, and the offline HTML report.
+    """
+    approved = {config.DEMO_VERIFICATION_MODEL_ID, config.DEMO_TUMOR_SAMPLE_ID}
+
+    def guarded(name: str, fn) -> None:
+        """Run fn() -> (ok, detail); any exception becomes a readable [FAIL]."""
+        try:
+            ok, detail = fn()
+        except Exception as exc:  # noqa: BLE001 -- convert to an explicit failure
+            ok, detail = False, f"{type(exc).__name__}: {exc}"
+        result.check(name, bool(ok), detail)
+
+    # ---- shared, best-effort loads (failure surfaces per-check) -----------
+    try:
+        cs = _load_strict_json(config.CASE_STUDY_JSON_FILE)
+    except Exception as exc:  # noqa: BLE001
+        cs = {"_error": f"{type(exc).__name__}: {exc}"}
+    try:
+        splits_assign = _load_strict_json(
+            config.PROCESSED_DIR / "splits.json")["assignment"]
+    except Exception as exc:  # noqa: BLE001
+        splits_assign = {"_error": f"{type(exc).__name__}: {exc}"}
+    try:
+        sp_series, sp_prov = sample_profile.load_external_sample()
+    except Exception as exc:  # noqa: BLE001
+        sp_series, sp_prov = None, {"_error": f"{type(exc).__name__}: {exc}"}
+
+    # ====================================================================
+    _section("9. Phase 2 committed artifact identity")
+
+    artifacts = {
+        "case_study.json": config.CASE_STUDY_JSON_FILE,
+        "phase2_report.html": config.REPORT_HTML_FILE,
+        "DGIdb snapshot TSV": config.DGIDB_SNAPSHOT_FILE,
+        "DGIdb manifest JSON": config.DGIDB_MANIFEST_FILE,
+        "BG003082 GCT": config.DEMO_TUMOR_GCT_FILE,
+        "ensembl_map.csv": config.ENSEMBL_MAP_FILE,
+    }
+
+    def _c9_present():
+        missing = sorted(n for n, p in artifacts.items() if not Path(p).is_file())
+        return (not missing), (
+            f"missing: {missing} -- restore from git, do not download replacements"
+            if missing else "all present")
+    guarded("9.1 all six required Phase 2 artifacts are present", _c9_present)
+
+    def _c9_cs_hash():
+        got = _sha256_file(config.CASE_STUDY_JSON_FILE)
+        return got == config.CASE_STUDY_JSON_SHA256, f"{got} vs pinned {config.CASE_STUDY_JSON_SHA256}"
+    guarded("9.2 case_study.json SHA-256 == config.CASE_STUDY_JSON_SHA256", _c9_cs_hash)
+
+    def _c9_html_hash():
+        got = _sha256_file(config.REPORT_HTML_FILE)
+        return got == config.REPORT_HTML_SHA256, f"{got} vs pinned {config.REPORT_HTML_SHA256}"
+    guarded("9.3 phase2_report.html SHA-256 == config.REPORT_HTML_SHA256", _c9_html_hash)
+
+    def _c9_strict():
+        _load_strict_json(config.CASE_STUDY_JSON_FILE)
+        return True, "parsed; no NaN / Infinity / -Infinity literals"
+    guarded("9.4 case_study.json parses under strict JSON rules", _c9_strict)
+
+    def _c9_schema():
+        got = cs.get("schema_version")
+        return got == config.CASE_STUDY_SCHEMA_VERSION, f"schema_version={got!r}"
+    guarded("9.5 case_study.json schema_version == config.CASE_STUDY_SCHEMA_VERSION", _c9_schema)
+
+    # ====================================================================
+    _section("10. Phase 2 sample reconciliation and leakage prevention")
+
+    def _c10_samples():
+        s = set(cs.get("samples", {}))
+        r = set(cs.get("rankings", {}))
+        return (s == approved and r == approved), f"samples={sorted(s)} rankings={sorted(r)}"
+    guarded("10.1 case-study samples and rankings are exactly {ACH-000364, BG003082}", _c10_samples)
+
+    def _c10_anchor():
+        anchor = config.DEMO_VERIFICATION_MODEL_ID
+        sa = cs["samples"][anchor]
+        conds = {
+            "case-study depmap_split == val": sa["depmap_split"] == "val",
+            "splits.json assignment == val": splits_assign.get(anchor) == "val",
+            "in_training_split is False": sa["in_training_split"] is False,
+            "prediction_status == held_out_prediction":
+                sa["prediction_status"] == config.PREDICTION_STATUS_HELD_OUT,
+            "outcome_status == measured_crispr":
+                sa["outcome_status"] == config.OUTCOME_STATUS_MEASURED,
+        }
+        bad = [k for k, v in conds.items() if not v]
+        return (not bad), f"failed: {bad}"
+    guarded("10.2 ACH-000364 is a held-out val sample (held_out_prediction / measured_crispr)", _c10_anchor)
+
+    def _c10_tumor():
+        tumor = config.DEMO_TUMOR_SAMPLE_ID
+        st = cs["samples"][tumor]
+        conds = {
+            "absent_from_all_depmap_splits is True":
+                st["absent_from_all_depmap_splits"] is True,
+            "absent from splits.json assignment": tumor not in splits_assign,
+            "analysis_role == exploratory_external_prediction":
+                st["analysis_role"] == "exploratory_external_prediction",
+            "prediction_status == exploratory_external_prediction":
+                st["prediction_status"] == config.PREDICTION_STATUS_EXPLORATORY,
+            "outcome_status == unavailable":
+                st["outcome_status"] == config.OUTCOME_STATUS_UNAVAILABLE,
+        }
+        bad = [k for k, v in conds.items() if not v]
+        return (not bad), f"failed: {bad}"
+    guarded("10.3 BG003082 is absent from every split (exploratory_external_prediction / unavailable)", _c10_tumor)
+
+    def _c10_order():
+        if sp_series is None:
+            return False, sp_prov["_error"]
+        gc = _load_strict_json(config.PROCESSED_DIR / "gene_columns.json")
+        canonical = list(gc["canonical_columns"])
+        return list(sp_series.index) == canonical, (
+            f"|series|={len(sp_series)} |canonical|={len(canonical)}; "
+            f"order_match={list(sp_series.index) == canonical}")
+    guarded("10.4 fresh sample_profile load: canonical gene index & order == gene_columns.json", _c10_order)
+
+    def _c10_recon_equal():
+        if sp_series is None:
+            return False, sp_prov["_error"]
+        committed = cs["samples"][config.DEMO_TUMOR_SAMPLE_ID]["baseline_input"]["reconciliation"]
+        fresh = sp_prov["reconciliation"]
+        same = (json.dumps(committed, sort_keys=True) == json.dumps(fresh, sort_keys=True))
+        return same, ("" if same else "fresh reconciliation != reconciliation in case_study.json")
+    guarded("10.5 fresh reconciliation data exactly equals the reconciliation in case_study.json", _c10_recon_equal)
+
+    def _c10_counts():
+        if sp_series is None:
+            return False, sp_prov["_error"]
+        r = sp_prov["reconciliation"]
+        conds = {
+            "mapped == 18,427": r["canonical_genes_mapped"] == 18427,
+            "missing == 33": r["canonical_genes_missing"] == 33,
+            "18,427 + 33 == 18,460 == canonical_genes":
+                r["canonical_genes_mapped"] + r["canonical_genes_missing"]
+                == 18460 == r["canonical_genes"],
+            "measured_zero == 1,407": r["canonical_genes_measured_zero"] == 1407,
+            "measured_nonzero == 17,020": r["canonical_genes_measured_nonzero"] == 17020,
+            "1,407 + 17,020 == 18,427 == mapped":
+                r["canonical_genes_measured_zero"] + r["canonical_genes_measured_nonzero"]
+                == 18427 == r["canonical_genes_mapped"],
+        }
+        bad = [k for k, v in conds.items() if not v]
+        return (not bad), f"failed: {bad}"
+    guarded("10.6 BG003082 counts reconcile: 18,427 + 33 = 18,460 ; 1,407 + 17,020 = 18,427", _c10_counts)
+
+    def _c10_clean():
+        if sp_series is None:
+            return False, sp_prov["_error"]
+        r = sp_prov["reconciliation"]
+        conds = {
+            "no canonical-Entrez collisions": r["canonical_id_collisions"] == 0,
+            "no duplicate external identifiers": r["duplicate_external_ids"] == 0,
+            "no gene-symbol fallback applied":
+                str(r["symbol_fallback"]).startswith("not attempted"),
+        }
+        bad = [k for k, v in conds.items() if not v]
+        return (not bad), f"failed: {bad}"
+    guarded("10.7 BG003082: no identifier collisions, no duplicate ids, no gene-symbol fallback", _c10_clean)
+
+    # ====================================================================
+    _section("11. Phase 2 rankings and drug-gene evidence")
+
+    def _c11_cs_validate():
+        rep = case_study.validate(verbose=False)
+        return rep["n_fail"] == 0, f"{rep['n_fail']} case_study.validate failure(s)"
+    guarded("11.1 case_study.validate(verbose=False) reports zero failures", _c11_cs_validate)
+
+    def _c11_rankings():
+        problems = []
+        for sample in sorted(approved):
+            sb = cs["rankings"][sample]
+            if set(sb) != {"ridge_pca", "ridge_head"}:
+                problems.append(f"{sample}: models {sorted(sb)}")
+                continue
+            for mk, mb in sb.items():
+                genes = mb["genes"]
+                if len(genes) != config.TOP_N_DEPENDENCIES:
+                    problems.append(f"{sample}/{mk}: {len(genes)} genes")
+                if mb["n_targets_ranked"] != 4297:
+                    problems.append(f"{sample}/{mk}: n_targets_ranked={mb['n_targets_ranked']}")
+                if [g["rank"] for g in genes] != list(range(1, config.TOP_N_DEPENDENCIES + 1)):
+                    problems.append(f"{sample}/{mk}: ranks != 1..{config.TOP_N_DEPENDENCIES}")
+                vals = [g["predicted_geneeffect"] for g in genes]
+                if any(vals[i] > vals[i + 1] for i in range(len(vals) - 1)):
+                    problems.append(f"{sample}/{mk}: predicted GeneEffect not ascending")
+        return (not problems), f"{problems}"
+    guarded("11.2 each sample: 2 model rankings x 25 targets, ranks 1..25, predicted GeneEffect ascending", _c11_rankings)
+
+    def _displayed_entrez():
+        disp = set()
+        for sb in cs["rankings"].values():
+            for mb in sb.values():
+                disp |= {g["entrez_id"] for g in mb["genes"]}
+        return disp
+
+    def _c11_keys():
+        disp = _displayed_entrez()
+        ev = cs["drug_gene_interaction_evidence"]
+        keys = set(ev["by_entrez"])
+        cov_n = ev["coverage"]["n_distinct_genes"]
+        ok = (keys == disp and len(disp) == cov_n and len(disp) == 56)
+        return ok, f"|displayed|={len(disp)} |by_entrez|={len(keys)} coverage.n_distinct_genes={cov_n}"
+    guarded("11.3 evidence by_entrez keys == union of displayed Entrez IDs (derived; 56 distinct)", _c11_keys)
+
+    def _c11_coverage():
+        disp = _displayed_entrez()
+        ev = cs["drug_gene_interaction_evidence"]
+        cov = ev["coverage"]
+        recount = {"cited": 0, "source_only": 0, "none_in_filtered_snapshot": 0}
+        for b in ev["by_entrez"].values():
+            recount[b["evidence_status"]] = recount.get(b["evidence_status"], 0) + 1
+        ok = (cov["n_cited"] + cov["n_source_only"] + cov["n_none_in_filtered_snapshot"]
+              == cov["n_distinct_genes"] == len(disp)
+              and recount["cited"] == cov["n_cited"]
+              and recount["source_only"] == cov["n_source_only"]
+              and recount["none_in_filtered_snapshot"] == cov["n_none_in_filtered_snapshot"])
+        return ok, f"coverage={cov} recount={recount} |displayed|={len(disp)}"
+    guarded("11.4 evidence coverage classes sum to the distinct displayed-gene count", _c11_coverage)
+
+    def _c11_records():
+        ev = cs["drug_gene_interaction_evidence"]
+        tiers = set(config.DGIDB_DIRECTION_TIERS)
+        incl = set(config.DGIDB_INCLUDED_SOURCES)
+        disc = config.DGIDB_EVIDENCE_DISCLAIMER
+        bad = []
+        for ent, bucket in ev["by_entrez"].items():
+            if bucket["entrez_id"] != ent:
+                bad.append(f"{ent}: bucket entrez_id {bucket['entrez_id']}")
+            for r in bucket["records"]:
+                if r["entrez_id"] != ent:
+                    bad.append(f"{ent}: record entrez_id {r['entrez_id']}")
+                if r["direction_tier"] not in tiers:
+                    bad.append(f"{ent}: direction_tier {r['direction_tier']}")
+                if r["interaction_source"] not in incl:
+                    bad.append(f"{ent}: source {r['interaction_source']}")
+                if r["disclaimer"] != disc:
+                    bad.append(f"{ent}: disclaimer mismatch")
+        return (not bad), f"{bad[:8]}"
+    guarded("11.5 every evidence record: Entrez matches bucket; tier/source/disclaimer in approved vocab", _c11_records)
+
+    def _c11_hashes():
+        ev_ret = cs["drug_gene_interaction_evidence"]["retrieval"]
+        snap_disk = _sha256_file(config.DGIDB_SNAPSHOT_FILE)
+        man_disk = _sha256_file(config.DGIDB_MANIFEST_FILE)
+        man = _load_strict_json(config.DGIDB_MANIFEST_FILE)
+        inp = cs["input_artifact_sha256"]
+        conds = {
+            "evidence.snapshot_sha256 == snapshot on disk": ev_ret["snapshot_sha256"] == snap_disk,
+            "evidence.manifest_sha256 == manifest on disk": ev_ret["manifest_sha256"] == man_disk,
+            "evidence.snapshot_sha256 == manifest.snapshot.sha256":
+                ev_ret["snapshot_sha256"] == man["snapshot"]["sha256"],
+            "case_study input hash (snapshot) agrees":
+                inp["data/external/dgidb/dgidb_2026-06b.interactions.filtered.tsv"] == snap_disk,
+            "case_study input hash (manifest) agrees":
+                inp["data/external/dgidb/dgidb_2026-06b.manifest.json"] == man_disk,
+        }
+        bad = [k for k, v in conds.items() if not v]
+        return (not bad), f"failed: {bad}"
+    guarded("11.6 case_study evidence snapshot/manifest hashes match the committed DGIdb files", _c11_hashes)
+
+    def _c11_snapshot():
+        rep = evidence.validate_snapshot()
+        return (rep["n_fail"] == 0 and len(rep["checks"]) == 34), (
+            f"{rep['n_fail']} failure(s), {len(rep['checks'])} checks (expected 34)")
+    guarded("11.7 evidence.validate_snapshot() reports zero failures (34 checks)", _c11_snapshot)
+
+    # ====================================================================
+    _section("12. Phase 2 offline report integrity")
+
+    def _c12_validate():
+        rep = report.validate(verbose=False)
+        return rep["n_fail"] == 0, f"{rep['n_fail']} report.validate failure(s)"
+    guarded("12.1 report.validate(verbose=False) reports zero failures", _c12_validate)
+
+    def _c12_embedded():
+        doc = Path(config.REPORT_HTML_FILE).read_text(encoding="utf-8")
+        m = re.search(
+            r'<script type="application/json" id="case-study-data">(.*?)</script>',
+            doc, flags=re.S)
+        if not m:
+            return False, "no #case-study-data script block found"
+        raw = m.group(1)
+        if "</" in raw or "<script" in raw.lower():
+            return False, "embedded JSON block is not fully escaped"
+        unesc = (raw.replace("\\u0026", "&")
+                    .replace("\\u003c", "<")
+                    .replace("\\u003e", ">"))
+        embedded = json.loads(unesc, parse_constant=_reject_json_constant)
+        committed = _load_strict_json(config.CASE_STUDY_JSON_FILE)
+        same = (json.dumps(embedded, sort_keys=True)
+                == json.dumps(committed, sort_keys=True))
+        return same, ("" if same else "embedded JSON != committed case_study.json")
+    guarded("12.2 JSON embedded in #case-study-data equals the strict-parsed committed case_study.json", _c12_embedded)
+
+    def _c12_offline():
+        low = Path(config.REPORT_HTML_FILE).read_text(encoding="utf-8").lower()
+        bad = []
+        if "<script src" in low:
+            bad.append("<script src=>")
+        if 'rel="stylesheet"' in low or "rel='stylesheet'" in low:
+            bad.append("external stylesheet <link>")
+        if re.search(r"@import\s+url\(", low):
+            bad.append("@import url(...)")
+        if "fetch(" in low:
+            bad.append("fetch(")
+        if "xmlhttprequest" in low:
+            bad.append("XMLHttpRequest")
+        return (not bad), f"remote/runtime dependency markers: {bad}"
+    guarded("12.3 report has no remote runtime dependency (no script src / link / @import / fetch / XHR)", _c12_offline)
+
+    def _c12_disclaimer():
+        doc = Path(config.REPORT_HTML_FILE).read_text(encoding="utf-8")
+        return config.DGIDB_EVIDENCE_DISCLAIMER in doc, "fixed non-efficacy disclaimer absent from report"
+    guarded("12.4 report contains the fixed non-efficacy disclaimer", _c12_disclaimer)
 
 
 def main() -> int:
@@ -417,6 +786,9 @@ def main() -> int:
     if assignment is not None and len(in_dataset):
         os_splits = assignment.reindex(in_dataset).value_counts().to_dict()
         print(f"         by split: {os_splits}")
+
+    # ---- Phase 2 application-layer integrity (sections 9-12) -------------
+    _phase2_application_checks(result)
 
     return result.summary()
 

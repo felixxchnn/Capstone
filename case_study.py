@@ -49,7 +49,6 @@ import argparse
 import ast
 import hashlib
 import json
-import platform
 import shutil
 import sys
 import tempfile
@@ -67,7 +66,7 @@ from fitted_artifacts import RECONSTRUCTION_STATUS
 from gene_ids import parse_gene_label
 from baseline import per_target_spearman  # pure numpy/scipy; no fit, no sklearn state
 
-SCHEMA_VERSION = "case-study/1"
+SCHEMA_VERSION = config.CASE_STUDY_SCHEMA_VERSION
 SOURCE_COMMIT = "d6a9b91148c235b1d1215553a3b46b958bc1b212"
 
 OUT_FILE = config.PROCESSED_DIR / "case_study.json"
@@ -107,11 +106,19 @@ def _r(x: float, dp: int) -> float:
 
 
 def _write_json_deterministic(obj, path: Path) -> None:
-    path.write_text(
-        json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=True,
-                   allow_nan=False) + "\n",
-        encoding="utf-8",
-    )
+    rendered = json.dumps(
+        obj,
+        indent=2,
+        sort_keys=True,
+        ensure_ascii=True,
+        allow_nan=False,
+    ) + "\n"
+
+    # The approved artifact was produced on Windows and is marked -text in
+    # .gitattributes. Write explicit CRLF bytes so regeneration is byte-identical
+    # on every OS -- Path.write_text() would otherwise emit LF on POSIX and the
+    # committed SHA-256 would only reproduce on Windows.
+    Path(path).write_bytes(rendered.replace("\n", "\r\n").encode("utf-8"))
 
 
 # --------------------------------------------------------------------------
@@ -176,6 +183,24 @@ class Inputs:
     # -- pre-flight (all hard stops) ------------------------------------
     def _preflight(self) -> None:
         b, h = self.baseline, self.head
+
+        # The artifact stamps a FROZEN environment (the one that produced the
+        # reconstructed fitted state), never the interpreter running this build,
+        # so regeneration is byte-identical on any machine. Both reconstruction
+        # manifests must agree on it or there is no single frozen environment to
+        # stamp -- hard stop.
+        b_env = b.manifest.get("environment")
+        h_env = h.manifest.get("environment")
+        if not isinstance(b_env, dict) or not b_env:
+            raise CaseStudyError(
+                "reconstructed baseline manifest has no 'environment' block -- "
+                "cannot stamp a frozen environment")
+        if b_env != h_env:
+            raise CaseStudyError(
+                "reconstructed baseline and head manifests disagree on "
+                f"'environment' ({b_env!r} != {h_env!r}) -- refusing to stamp an "
+                f"ambiguous frozen environment")
+        self.frozen_environment = dict(b_env)
 
         if [str(c) for c in self.expression.columns] != b.feature_names:
             raise CaseStudyError("expression columns != baseline artifact feature order")
@@ -718,11 +743,15 @@ def assemble() -> dict:
             "treatment-recommendation claim."),
         "source_commit": SOURCE_COMMIT,
         "generated_by": "case_study.py",
+        # FROZEN environment, read from the reconstructed-fitted manifest (the
+        # environment that produced the fitted state), NOT the interpreter
+        # running this build -- so the artifact is byte-identical on any machine.
+        # _preflight has already asserted the baseline and head manifests agree.
         "environment": {
-            "python": platform.python_version(),
-            "numpy": np.__version__,
-            "pandas": pd.__version__,
-            "scipy": __import__("scipy").__version__,
+            "python": inp.frozen_environment["python"],
+            "numpy": inp.frozen_environment["numpy"],
+            "pandas": inp.frozen_environment["pandas"],
+            "scipy": inp.frozen_environment["scipy"],
             "scikit_learn": "not used by case_study.py (inference is fitted_artifacts only)",
         },
         "methodology": {

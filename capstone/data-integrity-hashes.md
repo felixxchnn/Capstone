@@ -358,6 +358,27 @@ byte-identical** before and after. The only bytes that changed in `case_study.js
 `ranking_rule` / `observed_rank_rule` description strings (now stating the raw-`float64`
 method). No prediction, ranking, evidence record, or scientific result changed.
 
+**Cross-platform reproducibility repair — 2026-08-30 (generator code only; `case_study.json`
+byte-unchanged, SHA-256 still `a962c01a5b65a6ef579ea57dced67048bf9016ba0f66aab2355cf1f054796e8c`).**
+`case_study.py` previously wrote the artifact with `Path.write_text` — which emits LF on
+POSIX and CRLF on Windows — and stamped the `environment` block from the running interpreter
+(`platform.python_version()`, `np.__version__`, …), so a rebuild off Windows produced
+different bytes. Fixed in `case_study.py` / `config.py` / `report.py` **only**: the writer
+now emits explicit CRLF bytes (`rendered.replace("\n", "\r\n").encode("utf-8")` →
+`write_bytes`); the `environment` block is read from
+`data/processed/reconstructed_fitted/baseline_ridge_pca/manifest.json` (the frozen build
+environment — Python 3.14.6, numpy 2.5.0, pandas 3.0.3, scipy 1.18.0), which `case_study.py`
+already hash-verifies on load, not from the current process; `_preflight` hard-fails unless
+the baseline and head reconstruction manifests carry identical `environment` data; the
+schema-version and approved-SHA constants moved to `config.py`
+(`CASE_STUDY_SCHEMA_VERSION`, `REPORT_SCHEMA_VERSION`, `CASE_STUDY_JSON_SHA256`,
+`REPORT_HTML_SHA256`). No artifact byte changed on Windows; the repair makes a POSIX rebuild
+produce the same bytes. `phase2_report.html` is likewise byte-unchanged
+(`f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163`); `report.py` already
+wrote it with an explicit `newline="\n"`. `py checks.py` §9 now gates both committed
+artifacts against these `config` constants (55/55 overall; dataset-integrity portion still
+32/32).
+
 **`case_study.json`** — schema `case-study/1`, source commit
 `d6a9b91148c235b1d1215553a3b46b958bc1b212`. One deterministic artifact holding: the ranked
 top-25 predicted CRISPR dependencies from each **reconstructed** frozen Phase 1 model
