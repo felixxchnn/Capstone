@@ -749,14 +749,26 @@ def _load_sql_publications(
     sql_gz_path: Path,
     included_source_names: frozenset[str],
     required_keys: set[tuple[str, str, str]],
-) -> tuple[dict[tuple[str, str, str], tuple[str, ...]], dict[str, object]]:
+) -> tuple[
+    dict[tuple[str, str, str], tuple[str, ...]],
+    set[tuple[str, str, str]],
+    dict[str, object],
+]:
     """
     Build ``(gene_concept_id, drug_concept_id, source_name) -> sorted PMID tuple``
     from the SQL dump, restricted to the included sources.
 
-    ``required_keys`` are the (gene_concept, drug_concept, source) triples of the
-    retained TSV records; used to compute the structural linkage rate and to
-    hard-fail (per the task) if the dump cannot be linked reliably.
+    ``required_keys`` are the distinct (gene_concept, drug_concept, source)
+    *groups* of the retained TSV records (a set -- several retained rows can share
+    one group). Used to compute the structural linkage rate at group granularity
+    and to hard-fail (per the task) if the dump cannot be linked reliably.
+
+    Returns ``(key_to_pmids, linked_keys, stats)``. ``linked_keys`` is the subset
+    of ``required_keys`` that resolved to an SQL interaction; ``build_snapshot``
+    uses it to account for linkage at the row granularity as well (every snapshot
+    row is routed through this path -- see ``row_level_linkage`` in the manifest).
+    All ``structural_linkage`` counts in ``stats`` are per distinct group, NOT per
+    snapshot row.
     """
     sql_gz_path = Path(sql_gz_path)
 
@@ -814,10 +826,11 @@ def _load_sql_publications(
             r["publication_id"]
         )
 
-    # -- resolve every required key --
+    # -- resolve every required GROUP (distinct gene/drug/source triple) --
     key_to_pmids: dict[tuple[str, str, str], tuple[str, ...]] = {}
-    linkable = 0            # keys that CAN link (have a drug concept id)
-    linked = 0             # keys that DID link to an SQL interaction
+    linked_keys: set[tuple[str, str, str]] = set()
+    linkable = 0            # groups that CAN link (have a drug concept id)
+    linked = 0             # groups that DID link to an SQL interaction
     n_no_drug_concept = 0
     for (gcid, dcid, src) in required_keys:
         if not dcid:
@@ -833,6 +846,7 @@ def _load_sql_publications(
             key_to_pmids[(gcid, dcid, src)] = ()
             continue
         linked += 1
+        linked_keys.add((gcid, dcid, src))
         pmids: set[str] = set()
         for claim in iid_src_to_claims.get((iid, sid), set()):
             for pub in claim_to_pubs.get(claim, set()):
@@ -847,8 +861,8 @@ def _load_sql_publications(
     if linkage_rate < 0.995:
         raise DGIdbSnapshotError(
             f"{sql_gz_path.name}: only {linked}/{linkable} concept-identified "
-            f"records ({linkage_rate:.3%}) link to an interaction in the SQL "
-            f"dump. Refusing to build -- the release SQL cannot be linked "
+            f"linkage GROUPS ({linkage_rate:.3%}) link to an interaction in the "
+            f"SQL dump. Refusing to build -- the release SQL cannot be linked "
             f"reliably to the TSV records. STOP and investigate; do not "
             f"substitute a live query."
         )
@@ -872,16 +886,22 @@ def _load_sql_publications(
             "de-duplicated. NEVER parsed from free text."
         ),
         "structural_linkage": {
-            "distinct_key_triples": len(required_keys),
-            "concept_identified_triples": linkable,
-            "triples_without_drug_concept_id": n_no_drug_concept,
-            "linked_to_sql_interaction": linked,
-            "linkage_rate_over_concept_identified": round(linkage_rate, 5),
+            "granularity": (
+                "per distinct (dgidb_gene_concept_id, drug_concept_id, "
+                "interaction_source) GROUP -- NOT per snapshot row. Several "
+                "retained rows can share one group; row-level linkage is "
+                "reported separately in publications.row_level_linkage."
+            ),
+            "distinct_gene_drug_source_groups": len(required_keys),
+            "groups_with_drug_concept_id": linkable,
+            "groups_without_drug_concept_id": n_no_drug_concept,
+            "groups_linked_to_sql_interaction": linked,
+            "group_linkage_rate": round(linkage_rate, 5),
         },
-        "distinct_triples_with_pmids": n_with_pmids,
-        "total_pmid_mentions_over_triples": total_pmids,
+        "distinct_groups_with_pmids": n_with_pmids,
+        "total_pmid_mentions_over_groups": total_pmids,
     }
-    return key_to_pmids, stats
+    return key_to_pmids, linked_keys, stats
 
 
 # --------------------------------------------------------------------------
@@ -1076,19 +1096,79 @@ def build_snapshot(
     dci = core_cols.index("drug_concept_id")
     sci = core_cols.index("interaction_source")
     required_keys = {(c[gci], c[dci], c[sci]) for c in cores}
-    key_to_pmids, pub_stats = _load_sql_publications(
+    key_to_pmids, linked_keys, pub_stats = _load_sql_publications(
         sql_path, INCLUDED_SOURCES, required_keys
     )
 
     # ---- 6. assemble full records (dedup already done on the core) ----
+    # Every retained row is independently routed through the SQL linkage path
+    # here: its (gene_concept_id, drug_concept_id, interaction_source) group is
+    # looked up in key_to_pmids / linked_keys. This is the ROW-level companion to
+    # pub_stats["structural_linkage"], whose counts are per distinct group.
     pmids_idx = SNAPSHOT_COLUMNS.index("pmids")
     records: list[dict[str, str]] = []
+    row_link = {
+        "linked": 0,
+        "unlinked_group_has_no_drug_concept_id": 0,
+        "unlinked_group_did_not_match_sql_interaction": 0,
+        "unlinked_group_never_submitted_to_linkage": 0,
+    }
     for core in cores:
-        pm = key_to_pmids.get((core[gci], core[dci], core[sci]), ())
+        rk = (core[gci], core[dci], core[sci])
+        pm = key_to_pmids.get(rk, ())
+        if rk not in required_keys:                      # impossible by construction
+            row_link["unlinked_group_never_submitted_to_linkage"] += 1
+        elif not core[dci]:
+            row_link["unlinked_group_has_no_drug_concept_id"] += 1
+        elif rk in linked_keys:
+            row_link["linked"] += 1
+        else:
+            row_link["unlinked_group_did_not_match_sql_interaction"] += 1
         full = core[:pmids_idx] + [PMID_SEP.join(pm)] + core[pmids_idx:]
         rec = dict(zip(SNAPSHOT_COLUMNS[:-1], full))
         rec["record_key"] = _record_key(full)
         records.append(rec)
+
+    # every snapshot row must be accounted for (processed through the linkage
+    # path), and none may have silently skipped it -- per the task, report
+    # row-level coverage against the row count, never against a group denominator.
+    rows_unlinked = len(records) - row_link["linked"]
+    if row_link["unlinked_group_never_submitted_to_linkage"] != 0:
+        raise DGIdbSnapshotError(
+            f"{row_link['unlinked_group_never_submitted_to_linkage']} snapshot "
+            f"row(s) were never submitted to the SQL linkage path -- build is "
+            f"inconsistent. STOP."
+        )
+    if sum(row_link.values()) != len(records):
+        raise DGIdbSnapshotError(
+            f"row-level linkage accounting is incomplete: "
+            f"{sum(row_link.values())} categorised != {len(records)} rows. STOP."
+        )
+    row_level_linkage = {
+        "note": (
+            "Row-level companion to structural_linkage (which counts distinct "
+            "groups). Every snapshot row is routed through the SQL "
+            "publication-linkage path; snapshot_rows exceeds "
+            "distinct_gene_drug_source_groups only because several retained rows "
+            "share one group (same gene concept + drug concept + source, "
+            "differing in a sub-group field such as drug_claim_name, "
+            "interaction_type_raw or a score). This is de-duplication, not row "
+            "exclusion. Any row whose group did not match an SQL interaction is "
+            "counted here with an explicit reason and simply carries no PMIDs."
+        ),
+        "snapshot_rows": len(records),
+        "rows_linkage_applied": sum(row_link.values()),
+        "rows_linked_to_sql_interaction_group": row_link["linked"],
+        "rows_unlinked": rows_unlinked,
+        "rows_unlinked_by_reason": {
+            "group_has_no_drug_concept_id":
+                row_link["unlinked_group_has_no_drug_concept_id"],
+            "group_did_not_match_an_sql_interaction":
+                row_link["unlinked_group_did_not_match_sql_interaction"],
+            "group_never_submitted_to_linkage":
+                row_link["unlinked_group_never_submitted_to_linkage"],
+        },
+    }
 
     # ---- 7. deterministic total order ---------------------------
     records.sort(key=lambda rec: (
@@ -1245,6 +1325,7 @@ def build_snapshot(
         },
         "publications": {
             **pub_stats,
+            "row_level_linkage": row_level_linkage,
             "sep": PMID_SEP,
             "sorted": "numeric ascending, de-duplicated within a record",
             "records_with_pmids": records_with_pmids,
@@ -1681,6 +1762,60 @@ def validate_snapshot(
         triple_pmids[k] = r["pmids"]
     check("pmids are consistent across identical (gene,drug,source) triples", triple_ok)
 
+    # ---- structural_linkage is GROUP-level and cannot be read as row coverage --
+    sl = m["publications"].get("structural_linkage", {})
+    check("structural_linkage is explicitly per-group, not per-row",
+          "granularity" in sl and "not per snapshot row" in sl["granularity"].lower()
+          and "group_linkage_rate" in sl
+          and "distinct_gene_drug_source_groups" in sl
+          # the old ambiguous key names must be gone
+          and "linked_to_sql_interaction" not in sl
+          and "distinct_key_triples" not in sl,
+          f"keys={sorted(sl)}")
+
+    file_groups: dict[tuple[str, str, str], int] = {}
+    for r in snap.records:
+        k = (r["dgidb_gene_concept_id"], r["drug_concept_id"], r["interaction_source"])
+        file_groups[k] = file_groups.get(k, 0) + 1
+    n_groups = len(file_groups)
+    rows_in_shared = sum(v for v in file_groups.values() if v > 1)
+    extra_rows = sum(v - 1 for v in file_groups.values())
+    check("structural_linkage.distinct_gene_drug_source_groups recomputes from the file",
+          sl.get("distinct_gene_drug_source_groups") == n_groups,
+          f"file={n_groups} manifest={sl.get('distinct_gene_drug_source_groups')}")
+    check("record_count >= distinct groups; the difference is shared-group rows",
+          len(snap.records) >= n_groups
+          and len(snap.records) - n_groups == extra_rows,
+          f"rows={len(snap.records)} groups={n_groups} extra={extra_rows} "
+          f"rows_in_shared_groups={rows_in_shared}")
+
+    # ---- row_level_linkage: every row processed, denominator == row count -----
+    rl = m["publications"].get("row_level_linkage", {})
+    rc = m["snapshot"]["record_count"]
+    by_reason = rl.get("rows_unlinked_by_reason", {})
+    check("row_level_linkage present and keyed to the row count (not a group denom)",
+          rl.get("snapshot_rows") == rc == len(snap.records)
+          and rl.get("rows_linkage_applied") == rc,
+          f"snapshot_rows={rl.get('snapshot_rows')} applied="
+          f"{rl.get('rows_linkage_applied')} record_count={rc}")
+    check("row_level_linkage accounting is complete (linked + unlinked == rows)",
+          rl.get("rows_linked_to_sql_interaction_group", -1)
+          + rl.get("rows_unlinked", -1) == rc
+          and sum(by_reason.values()) == rl.get("rows_unlinked"),
+          f"linked={rl.get('rows_linked_to_sql_interaction_group')} "
+          f"unlinked={rl.get('rows_unlinked')} by_reason={by_reason}")
+    check("no snapshot row skipped the linkage path",
+          by_reason.get("group_never_submitted_to_linkage", -1) == 0)
+    # this committed release links every row; record it explicitly
+    check("this release: every snapshot row links to an SQL interaction group",
+          rl.get("rows_unlinked") == 0
+          and rl.get("rows_linked_to_sql_interaction_group") == rc,
+          f"unlinked={rl.get('rows_unlinked')}")
+    check("structural_linkage group rate is 100% for this release",
+          sl.get("group_linkage_rate") == 1.0
+          and sl.get("groups_linked_to_sql_interaction")
+          == sl.get("distinct_gene_drug_source_groups") == n_groups)
+
     # every source in the snapshot has a recorded redistribution decision,
     # and it is "included"
     src_in_snap = sorted({r["interaction_source"] for r in snap.records})
@@ -1854,6 +1989,12 @@ def _self_test() -> int:  # noqa: C901 -- one linear scenario, kept together
         # AAA activator from DoCM (second included source)
         inter_rows.append(irow("hgnc:1", "AAA", "docmact", "docm:1", "false",
                                "DoCM", "activator", "4.5"))
+        # A SECOND retained row in the SAME linkage group as act0
+        # (hgnc:1 / chembl:a0 / ChEMBL) -- different drug_name, so a distinct
+        # core record but one (gene,drug,source) group. Exercises
+        # snapshot_rows > distinct_gene_drug_source_groups with 0 rows unlinked.
+        inter_rows.append(irow("hgnc:1", "AAA", "act0_brandB", "chembl:a0", "false",
+                               "ChEMBL", "agonist", "5.0"))
 
         _write_tsv(stage / "interactions.tsv",
                    ["# Data version: Dec-2023", "# DGIdb version: v.5.0.11"], icols, inter_rows)
@@ -2068,6 +2209,34 @@ def _self_test() -> int:  # noqa: C901 -- one linear scenario, kept together
             assert snap.manifest["publications"]["coverage_by_source"]["ChEMBL"]["records_with_pmids"] == 0
             print("  [ok] PMIDs joined from SQL dump: sorted, deduped, source-attributed, not all-empty")
 
+            # ---- 4c-bis. group-level vs row-level linkage accounting ----
+            pubm = snap.manifest["publications"]
+            slm = pubm["structural_linkage"]
+            rlm = pubm["row_level_linkage"]
+            # the renamed, unambiguous group-level keys (old names must be gone)
+            assert "linked_to_sql_interaction" not in slm
+            assert "distinct_key_triples" not in slm
+            assert "not per snapshot row" in slm["granularity"].lower()
+            nrec = len(snap.records)
+            groups = {(r["dgidb_gene_concept_id"], r["drug_concept_id"],
+                       r["interaction_source"]) for r in snap.records}
+            assert slm["distinct_gene_drug_source_groups"] == len(groups) < nrec, (
+                slm["distinct_gene_drug_source_groups"], len(groups), nrec)
+            assert slm["group_linkage_rate"] == 1.0
+            assert slm["groups_linked_to_sql_interaction"] == len(groups)
+            # row-level: denominator is the ROW count, every row was processed,
+            # none unlinked in this synthetic scenario
+            assert rlm["snapshot_rows"] == nrec
+            assert rlm["rows_linkage_applied"] == nrec
+            assert rlm["rows_linked_to_sql_interaction_group"] == nrec
+            assert rlm["rows_unlinked"] == 0
+            assert sum(rlm["rows_unlinked_by_reason"].values()) == 0
+            # the two act0-group rows are distinct records but one group
+            a0 = [r for r in snap.records if r["drug_concept_id"] == "chembl:a0"]
+            assert len(a0) == 2 and len({r["record_key"] for r in a0}) == 2
+            print("  [ok] linkage reported per-group AND per-row; row denom = row count; "
+                  f"{nrec} rows / {len(groups)} groups, 0 unlinked")
+
             # ---- 4d. SQL that cannot be linked -> hard STOP -------
             broken_sql = dict(sql_tables)
             broken_sql["interactions"] = (sql_tables["interactions"][0], [])  # no interactions
@@ -2206,7 +2375,14 @@ def _print_snapshot_summary(snap: DGIdbSnapshot) -> None:
           f"{gi['unresolved_hgnc_row_has_no_entrez']} HGNC row w/o Entrez, "
           f"{gi['unresolved_entrez_not_in_canonical_space']} outside canonical space")
     pub = m["publications"]
+    sl = pub["structural_linkage"]
+    rl = pub["row_level_linkage"]
     print("-" * 74)
+    print(f"  SQL linkage (groups) : {sl['groups_linked_to_sql_interaction']} / "
+          f"{sl['distinct_gene_drug_source_groups']} distinct "
+          f"(gene,drug,source) groups  (rate {sl['group_linkage_rate']})")
+    print(f"  SQL linkage (rows)   : {rl['rows_linked_to_sql_interaction_group']} / "
+          f"{rl['snapshot_rows']} snapshot rows  ({rl['rows_unlinked']} unlinked)")
     print(f"  publications     : {pub['records_with_pmids']} / "
           f"{m['snapshot']['record_count']} records carry >=1 PMID  "
           f"(SQL-dump join, never free text)")

@@ -164,8 +164,16 @@ byte-exact on every platform):
 
 ```
 f7d2089facc17ddac01e422cab8dc89d48aae463573094490f04bc42ef0a0bee  data/external/dgidb/dgidb_2026-06b.interactions.filtered.tsv  14,016,155 bytes
-d6b6f171c725646dd5622e0e80ffadfb9b521cdf6fb02a164ad470f441fdf056  data/external/dgidb/dgidb_2026-06b.manifest.json                  25,470 bytes
+9fb585c723cb2102a7cd335dbfac478b206d91cad04951f8ca7f70f495f6f912  data/external/dgidb/dgidb_2026-06b.manifest.json                  26,649 bytes
 ```
+
+**Manifest sha256 changed `d6b6f171…` → `9fb585c7…` on 2026-08-29** (evidence-layer
+linkage-metric repair — see the note at the end of this section). The snapshot TSV is
+**byte-unchanged** (`f7d2089f…` before and after): no record content, `record_key`, PMID
+value, ordering, or count changed. The repair only renamed the manifest's SQL-linkage
+counters to be unambiguously *per group*, and added an explicit *per row* linkage block.
+Both committed files still regenerate byte-identically across `--refresh` and
+`--from-staging`.
 
 **`dgidb_2026-06b.interactions.filtered.tsv`** — 37,343 interaction records, 26 columns
 (schema in the manifest), one record per unique `record_key` (SHA-1 of the preceding 25
@@ -194,8 +202,22 @@ no HGNC row). Direction is normalised strictly from DGIdb's own
 **Publications (`pmids`).** Recovered by identifier join from the **temporary** DGIdb
 `2026-06b` SQL dump (`interaction_claims` → `interaction_claims_publications` →
 `publications`, keyed by gene concept id + drug concept id + interaction source) — **never**
-parsed from free text. Structural linkage of retained records to an SQL interaction is
-**36,950 / 36,950 = 100%**. PMIDs are stored `;`-joined, numerically sorted, de-duplicated.
+parsed from free text. SQL linkage is reported at two granularities and they are not the
+same number:
+
+- **Per linkage group** (`publications.structural_linkage`): a group is one distinct
+  `(dgidb_gene_concept_id, drug_concept_id, interaction_source)` triple. There are
+  **36,950** such groups among the 37,343 rows (373 groups hold >1 row — those rows differ
+  only in a sub-group field such as `drug_claim_name`, `interaction_type_raw` or a score).
+  All **36,950 / 36,950 = 100%** link to an SQL interaction. This is *not* a row-level
+  coverage figure and the manifest key names (`distinct_gene_drug_source_groups`,
+  `groups_linked_to_sql_interaction`, `group_linkage_rate`) now say so explicitly.
+- **Per snapshot row** (`publications.row_level_linkage`): every one of the **37,343** rows
+  is independently routed through the linkage path; **37,343 / 37,343** rows resolve to a
+  linked group, **0** unlinked (`rows_unlinked_by_reason` all zero). `build_snapshot` and
+  `--validate` hard-assert this — the denominator is the row count, never a group count.
+
+PMIDs are stored `;`-joined, numerically sorted, de-duplicated.
 Coverage is source-skewed and this is disclosed: **CIViC 1,068/1,076**, **DoCM 72/72**,
 **NCI 5,938/5,939**; **ChEMBL 0/12,815**, **GuideToPharmacology 0/17,050**, **FDA 0/391**
 (DGIdb records no claim-level publications for those three). **7,078** records (19%) carry
@@ -205,12 +227,25 @@ absent from this DGIdb export and stay empty.
 **Deterministic.** Both committed files **regenerate byte-identically** across repeated
 builds and regardless of `--refresh` vs `--from-staging`:
 `py evidence.py --refresh` (or `--from-staging DIR`) reproduces the snapshot
-`f7d2089f…` and the manifest `d6b6f171…` exactly. No committed artifact contains a
+`f7d2089f…` and the manifest `9fb585c7…` exactly. No committed artifact contains a
 wall-clock value — the retrieval provenance is the fixed build input
 `config.DGIDB_RETRIEVED_UTC = 2026-08-29T00:00:00Z`; per-run execution times and the
 download-vs-staging mode go only to the git-ignored
 `data/external/dgidb/build_runlog.jsonl`. `py evidence.py --validate` re-checks every
-invariant (26 checks) against the committed files with no network access.
+invariant (**34 checks**) against the committed files with no network access.
+
+**Linkage-metric repair — 2026-08-29 (manifest `d6b6f171…` → `9fb585c7…`, TSV unchanged).**
+An evidence-count reconciliation found the manifest reported SQL linkage as
+`36,950 / 36,950 = 100%` in a way that read as row-level coverage of the 37,343 snapshot
+rows, when 36,950 is the count of distinct `(gene_concept_id, drug_concept_id,
+interaction_source)` **linkage groups** (373 groups hold >1 row → 393 extra rows). Fix, in
+`evidence.py` only: the `publications.structural_linkage` counters were renamed to
+unambiguously per-group names and given a `granularity` note; a new
+`publications.row_level_linkage` block reports linkage against the row count
+(37,343 / 37,343, 0 unlinked, categorised `rows_unlinked_by_reason`); `build_snapshot` now
+hard-asserts every row was routed through the linkage path and the accounting is complete;
+`--validate` gained 8 checks (26 → 34) and `--self-test` gained a shared-group row. No
+snapshot record, `record_key`, PMID value, count, or ordering changed — only the manifest.
 
 **Scope.** Evidence retrieval only — no model, no efficacy / clinical-relevance / approval /
 indication / interaction-direction-beyond-DGIdb / osteosarcoma-relevance inference. **This is

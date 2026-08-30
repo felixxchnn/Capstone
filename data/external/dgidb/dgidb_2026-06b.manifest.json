@@ -147,14 +147,27 @@
     },
     "method": "SQL dump interaction_claims -> interaction_claims_publications -> publications, joined onto retained records by (gene concept_id, drug concept_id, interaction source). PMIDs sorted numerically and de-duplicated. NEVER parsed from free text.",
     "structural_linkage": {
-      "distinct_key_triples": 36950,
-      "concept_identified_triples": 36950,
-      "triples_without_drug_concept_id": 0,
-      "linked_to_sql_interaction": 36950,
-      "linkage_rate_over_concept_identified": 1.0
+      "granularity": "per distinct (dgidb_gene_concept_id, drug_concept_id, interaction_source) GROUP -- NOT per snapshot row. Several retained rows can share one group; row-level linkage is reported separately in publications.row_level_linkage.",
+      "distinct_gene_drug_source_groups": 36950,
+      "groups_with_drug_concept_id": 36950,
+      "groups_without_drug_concept_id": 0,
+      "groups_linked_to_sql_interaction": 36950,
+      "group_linkage_rate": 1.0
     },
-    "distinct_triples_with_pmids": 6914,
-    "total_pmid_mentions_over_triples": 9836,
+    "distinct_groups_with_pmids": 6914,
+    "total_pmid_mentions_over_groups": 9836,
+    "row_level_linkage": {
+      "note": "Row-level companion to structural_linkage (which counts distinct groups). Every snapshot row is routed through the SQL publication-linkage path; snapshot_rows exceeds distinct_gene_drug_source_groups only because several retained rows share one group (same gene concept + drug concept + source, differing in a sub-group field such as drug_claim_name, interaction_type_raw or a score). This is de-duplication, not row exclusion. Any row whose group did not match an SQL interaction is counted here with an explicit reason and simply carries no PMIDs.",
+      "snapshot_rows": 37343,
+      "rows_linkage_applied": 37343,
+      "rows_linked_to_sql_interaction_group": 37343,
+      "rows_unlinked": 0,
+      "rows_unlinked_by_reason": {
+        "group_has_no_drug_concept_id": 0,
+        "group_did_not_match_an_sql_interaction": 0,
+        "group_never_submitted_to_linkage": 0
+      }
+    },
     "sep": ";",
     "sorted": "numeric ascending, de-duplicated within a record",
     "records_with_pmids": 7078,
