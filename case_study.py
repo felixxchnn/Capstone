@@ -226,26 +226,47 @@ def _load_embeddings() -> pd.DataFrame:
 
 RANKING_RULE = (
     "more negative predicted CRISPR GeneEffect = stronger predicted dependency; "
-    "sort ascending by predicted GeneEffect (rounded to %d dp), ties broken by "
-    "ascending numeric Entrez ID" % PRED_DP
+    "sort ascending by RAW finite float64 predicted GeneEffect, most-negative "
+    "first; ascending numeric Entrez ID breaks ONLY exact raw-value ties. "
+    "predicted_geneeffect is rounded to %d dp for display AFTER ranks and top-N "
+    "membership are frozen" % PRED_DP
 )
 OBSERVED_RANK_RULE = (
     "1-based position of the gene when all 4,297 targets are sorted ascending by "
-    "(observed CRISPR GeneEffect rounded to %d dp, ascending numeric Entrez ID); "
-    "null where ACH-000364 has no observed value for that target" % PRED_DP
+    "RAW finite float64 observed CRISPR GeneEffect (most-negative first; "
+    "ascending numeric Entrez ID breaks ONLY exact raw-value ties); null where "
+    "ACH-000364 has no observed value for that target"
 )
 
 
 def _full_ranking(pred_vec: np.ndarray, entrez_int: list[int]) -> list[int]:
-    """Indices of all targets, most-negative-first, Entrez tie-break. Deterministic."""
-    rounded = [_r(v, PRED_DP) for v in pred_vec]
-    return sorted(range(len(rounded)), key=lambda j: (rounded[j], entrez_int[j]))
+    """
+    All target indices, strongest predicted dependency first.
+
+    Sort key is the RAW finite float64 predicted GeneEffect (most-negative
+    first); ascending numeric Entrez ID breaks ONLY exact raw-value ties.
+    Rounding for display happens later, after ranks and top-N membership are
+    frozen. A non-finite prediction (should not occur -- predictions are dot
+    products of finite inputs) is pushed to the end in Entrez order so it can
+    never enter the top-N.
+    """
+    finite = [j for j in range(len(pred_vec)) if np.isfinite(pred_vec[j])]
+    nonfinite = [j for j in range(len(pred_vec)) if not np.isfinite(pred_vec[j])]
+    finite.sort(key=lambda j: (float(pred_vec[j]), entrez_int[j]))
+    nonfinite.sort(key=lambda j: entrez_int[j])
+    return finite + nonfinite
 
 
 def _observed_rank_lookup(observed_vec: np.ndarray,
                           entrez_int: list[int]) -> dict[int, int]:
+    """
+    1-based rank of each target with a finite observed value, over the full
+    4,297-target universe. Sort key is the RAW finite float64 observed
+    GeneEffect (most-negative first); ascending numeric Entrez ID breaks ONLY
+    exact raw-value ties.
+    """
     finite = [j for j in range(len(observed_vec)) if np.isfinite(observed_vec[j])]
-    finite.sort(key=lambda j: (_r(observed_vec[j], PRED_DP), entrez_int[j]))
+    finite.sort(key=lambda j: (float(observed_vec[j]), entrez_int[j]))
     return {j: rank for rank, j in enumerate(finite, start=1)}
 
 

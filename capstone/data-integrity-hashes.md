@@ -342,8 +342,21 @@ is identical across the two model directories (same 4,297 targets, same order).
 ### Added with the Phase 2 case study (`case_study.py`)
 
 ```
-cbe84b78d1b5e1c77e31436914babc853289604f882b8742ae0a83a8caf9f8a1     168,577  data/processed/case_study.json
+a962c01a5b65a6ef579ea57dced67048bf9016ba0f66aab2355cf1f054796e8c     169,235  data/processed/case_study.json
 ```
+
+**Ranking-method repair — 2026-08-29 (`cbe84b78…` → `a962c01a…`).** A ranking audit found
+`case_study._full_ranking` / `_observed_rank_lookup` sorted predictions **already rounded to
+10 dp** (with Entrez as tie-break), rather than sorting the raw finite `float64` values and
+rounding only for display after ranks froze. Repaired to sort raw `float64` (Entrez breaks
+**only exact raw-value ties**; display rounding applied after top-N is frozen). The
+rank-25 / rank-26 raw prediction separations are 9.077e-03 (ACH-000364/ridge_pca),
+2.458e-04 (ACH-000364/ridge_head), 2.557e-02 (BG003082/ridge_pca), 3.860e-03
+(BG003082/ridge_head) — all ≫ the 1e-10 rounding grid, with **zero exact raw ties** in any
+of the four prediction vectors or the observed vector, so **every ranked gene row is
+byte-identical** before and after. The only bytes that changed in `case_study.json` are the
+`ranking_rule` / `observed_rank_rule` description strings (now stating the raw-`float64`
+method). No prediction, ranking, evidence record, or scientific result changed.
 
 **`case_study.json`** — schema `case-study/1`, source commit
 `d6a9b91148c235b1d1215553a3b46b958bc1b212`. One deterministic artifact holding: the ranked

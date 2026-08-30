@@ -2867,9 +2867,9 @@
         "n_targets_ranked": 4297,
         "n_targets_with_observed_value": 4297,
         "not_a_recommendation": "ranked genes are predicted dependencies, NOT therapeutic targets, treatments, or recommendations",
-        "observed_rank_rule": "1-based position of the gene when all 4,297 targets are sorted ascending by (observed CRISPR GeneEffect rounded to 10 dp, ascending numeric Entrez ID); null where ACH-000364 has no observed value for that target",
+        "observed_rank_rule": "1-based position of the gene when all 4,297 targets are sorted ascending by RAW finite float64 observed CRISPR GeneEffect (most-negative first; ascending numeric Entrez ID breaks ONLY exact raw-value ties); null where ACH-000364 has no observed value for that target",
         "observed_values_attached_after_ranking": true,
-        "ranking_rule": "more negative predicted CRISPR GeneEffect = stronger predicted dependency; sort ascending by predicted GeneEffect (rounded to 10 dp), ties broken by ascending numeric Entrez ID"
+        "ranking_rule": "more negative predicted CRISPR GeneEffect = stronger predicted dependency; sort ascending by RAW finite float64 predicted GeneEffect, most-negative first; ascending numeric Entrez ID breaks ONLY exact raw-value ties. predicted_geneeffect is rounded to 10 dp for display AFTER ranks and top-N membership are frozen"
       },
       "ridge_pca": {
         "genes": [
@@ -3080,9 +3080,9 @@
         "n_targets_ranked": 4297,
         "n_targets_with_observed_value": 4297,
         "not_a_recommendation": "ranked genes are predicted dependencies, NOT therapeutic targets, treatments, or recommendations",
-        "observed_rank_rule": "1-based position of the gene when all 4,297 targets are sorted ascending by (observed CRISPR GeneEffect rounded to 10 dp, ascending numeric Entrez ID); null where ACH-000364 has no observed value for that target",
+        "observed_rank_rule": "1-based position of the gene when all 4,297 targets are sorted ascending by RAW finite float64 observed CRISPR GeneEffect (most-negative first; ascending numeric Entrez ID breaks ONLY exact raw-value ties); null where ACH-000364 has no observed value for that target",
         "observed_values_attached_after_ranking": true,
-        "ranking_rule": "more negative predicted CRISPR GeneEffect = stronger predicted dependency; sort ascending by predicted GeneEffect (rounded to 10 dp), ties broken by ascending numeric Entrez ID"
+        "ranking_rule": "more negative predicted CRISPR GeneEffect = stronger predicted dependency; sort ascending by RAW finite float64 predicted GeneEffect, most-negative first; ascending numeric Entrez ID breaks ONLY exact raw-value ties. predicted_geneeffect is rounded to 10 dp for display AFTER ranks and top-N membership are frozen"
       }
     },
     "BG003082": {
@@ -3244,7 +3244,7 @@
         "n_displayed": 25,
         "n_targets_ranked": 4297,
         "not_a_recommendation": "ranked genes are predicted dependencies, NOT therapeutic targets, treatments, or recommendations",
-        "ranking_rule": "more negative predicted CRISPR GeneEffect = stronger predicted dependency; sort ascending by predicted GeneEffect (rounded to 10 dp), ties broken by ascending numeric Entrez ID"
+        "ranking_rule": "more negative predicted CRISPR GeneEffect = stronger predicted dependency; sort ascending by RAW finite float64 predicted GeneEffect, most-negative first; ascending numeric Entrez ID breaks ONLY exact raw-value ties. predicted_geneeffect is rounded to 10 dp for display AFTER ranks and top-N membership are frozen"
       },
       "ridge_pca": {
         "genes": [
@@ -3404,7 +3404,7 @@
         "n_displayed": 25,
         "n_targets_ranked": 4297,
         "not_a_recommendation": "ranked genes are predicted dependencies, NOT therapeutic targets, treatments, or recommendations",
-        "ranking_rule": "more negative predicted CRISPR GeneEffect = stronger predicted dependency; sort ascending by predicted GeneEffect (rounded to 10 dp), ties broken by ascending numeric Entrez ID"
+        "ranking_rule": "more negative predicted CRISPR GeneEffect = stronger predicted dependency; sort ascending by RAW finite float64 predicted GeneEffect, most-negative first; ascending numeric Entrez ID breaks ONLY exact raw-value ties. predicted_geneeffect is rounded to 10 dp for display AFTER ranks and top-N membership are frozen"
       }
     }
   },

@@ -450,7 +450,9 @@ committed Phase 1 val statistic exactly at 4 dp (`--validate`); byte-identical r
 historical fitted objects and change no Phase 1 result.
 
 **`case_study.py` and `data/processed/case_study.json` now exist** (2026-08-29, schema
-`case-study/1`, sha256 `cbe84b78…`, 168,577 B). It orchestrates the two reconstructed
+`case-study/1`, sha256 `a962c01a…`, 169,235 B; ranking now sorts raw `float64`
+predictions, rounding only for display after top-N freezes — audit-repaired 2026-08-29,
+every ranked gene row byte-unchanged). It orchestrates the two reconstructed
 models over ACH-000364 (`val` anchor) and BG003082 (external, absent from all splits),
 producing per-model top-25 ranked predicted dependencies, drug-gene interaction evidence
 for the 56 displayed genes (8 cited / 8 source-only / 40 none), and the locked five-line
