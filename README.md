@@ -14,11 +14,21 @@ its provenance.
 
 **Phase 2 (approved scope, in progress):** a proof-of-concept application layer that
 uses Phase 1's frozen models to rank predicted CRISPR dependencies for two samples and
-connects the top-ranked genes to cited drug–gene interaction evidence. So far the external
-inputs are committed (`data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz`,
-`data/processed/ensembl_map.csv`) and the external-sample loader (`sample_profile.py`) is
-implemented and validated; the evidence layer, orchestration and report are still to come.
-See "Phase 2" below and `capstone/scope-decisions.md` for the full approved scope.
+connects the top-ranked genes to cited drug–gene interaction evidence. Committed so far:
+the external inputs (`data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz`,
+`data/processed/ensembl_map.csv`), the external-sample loader (`sample_profile.py`), the
+BG003082 Geneformer sidecar embedding, the offline licence-filtered DGIdb evidence snapshot
+(`evidence.py`), and **reconstructed fitted state** for the two frozen Phase 1 linear
+models. The last of these needs a word of honesty: the original Phase 1 `StandardScaler` /
+`PCA` / `Ridge` objects were never serialised, so `reconstruct_fitted.py` writes
+*"reconstructed fitted state at the frozen Phase 1 alpha from the unchanged frozen training
+data"* — the identical pipeline re-fit on exactly the committed `train` split, at the alpha
+**read from** the results files (no re-selection), serialised as plain `.npy` under
+`data/processed/reconstructed_fitted/` and loaded with **no `fit()`** by
+`fitted_artifacts.py`. It reproduces every committed Phase 1 validation statistic exactly
+at the recorded precision, but it is **not** the historical fitted objects. Orchestration
+(`case_study.py`) and the report are still to come. See "Phase 2" below and
+`capstone/scope-decisions.md` for the full approved scope.
 
 ## Data and licences
 

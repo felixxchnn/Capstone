@@ -253,3 +253,88 @@ not a claim that the whole DGIdb dataset is redistributable; it is not**, and ea
 record additionally remains subject to its own source-specific licence terms (the compilation
 licence does not override them). Every returned display record carries: *"A recorded drug–gene
 interaction does not establish efficacy for this sample or for osteosarcoma."*
+
+### Added with the reconstructed fitted artifacts (`reconstruct_fitted.py`)
+
+**What these are.** "**Reconstructed fitted state at the frozen Phase 1 alpha from the
+unchanged frozen training data**" for the two frozen Phase 1 linear models. The original
+Phase 1 `StandardScaler` / `PCA` / `Ridge` objects were never serialised;
+`baseline_results.json` / `head_results.json` hold only hyper-parameters and metrics.
+`reconstruct_fitted.py` re-fits the **identical** scikit-learn pipeline on **exactly the
+committed `train` split** (800 lines; byte-identical row set for both arms, ModelID-list
+SHA-256 `8df915c9…`), at the alpha **read from** the committed results
+(`ridge_pca` 100000.0, `ridge_head` 3162.0 — no selection re-run), and writes plain `.npy`
+arrays + a `manifest.json`. `fitted_artifacts.py` loads them and predicts with array
+arithmetic only — **no sklearn import, no `fit()` / `fit_transform()`**.
+
+**They are NOT the original fitted objects.** They are a reproducibility convenience for the
+Phase 2 demo (`case_study.py`). No Phase 1 result, split, target ordering, or committed
+results file changes.
+
+**Reproduction check (enforced by `py reconstruct_fitted.py --validate`).** Loading the
+artifacts and predicting on the `val` split reproduces **every** committed statistic in
+`baseline_results.json::tasks.crispr.models.ridge_pca` and
+`head_results.json::tasks.crispr.models.ridge_head` — `spearman_mean`/`median`/`q25`/`q75`/
+`frac_positive`/`n_targets_scored`/`n_targets_undefined` and the matching `r2_*` — **exactly
+after rounding to 4 dp** (the precision Phase 1 recorded). Tolerance: equality at 4 dp;
+underlying agreement is full `float64` because the identical fit is re-executed. Against the
+git-ignored (non-authoritative) `data/processed/predictions/` matrices the per-cell
+prediction max abs diff is `4.4e-16` (baseline; `PCA.fit_transform` vs the closed-form
+`transform` the loader uses) and `0.0` (head). `PCA` resolved solver: `randomized`
+(seeded, `random_state=20260722`). `Ridge` solver: `auto` → `cholesky`.
+
+**Environment** (recorded in every manifest; required for byte-reproduction): Python
+`3.14.6`, numpy `2.5.0`, scipy `1.18.0`, scikit-learn `1.9.0`, pandas `3.0.3`.
+Base commit: `12fab80a705d0adf473ca07dd9b455f1b807fc35` (the manifests gate all ten
+committed inputs against their SHA-256 at this commit and refuse to build if any moved).
+
+**Deterministic.** `py reconstruct_fitted.py --build` twice produces byte-identical files
+(`.npy` headers carry no timestamp; `manifest.json` is `sort_keys=True`, no wall-clock).
+`--check-determinism` and `--verify` (13/13) enforce this;
+`--self-test` covers the synthetic path.
+
+**Sizes.** `baseline_ridge_pca/` 37,658,165 B; `head_ridge_head/` 26,559,882 B; total
+**64,218,047 B** (~61.2 MiB) uncompressed, ~58.5 MiB gzip-9 (float64 arrays compress
+poorly; **no lossy compression is used** — arrays are stored at their original `float64`).
+Largest single file `pca_components.npy` = 29,536,128 B (~28.2 MiB), well under the 100 MiB
+GitHub blob limit; no repository storage-strategy change. `.gitattributes` already marks
+`data/processed/** -text`.
+
+SHA-256 of every committed file (`manifest.json` hashes shown too — a manifest cannot list
+its own hash, so `output_sha256` inside it covers the other files and these lines cover the
+manifests):
+
+```
+# data/processed/reconstructed_fitted/baseline_ridge_pca/
+d29052625864112062a21a0ffdfd4ae00262765693f321cf53002e1aef609969     374,035  feature_names.json
+4710e620f21a3ff5d44ec4ac34fb29c56a5304dc29c1f53c568e0dcc8137f689     147,808  impute_mean.npy
+133af1d12442775a3d16e223380b753650bdfc86445a8f69aaf650f5399b4efe       8,068  manifest.json
+98c6209a04809252dacbf8a57d6de893ef64a1559799cac1b3f4fe2a979c469d  29,536,128  pca_components.npy
+bfdb1ce1d41887ef418f0d6b2a441d5a7063ab5c863727dd7ba1306ebb1ce526       1,728  pca_explained_variance.npy
+5794b9d82ae58001bdf05cb9f7ef4f6d4f893e07e0cb1e0375abec0a49cb2752       1,728  pca_explained_variance_ratio.npy
+f957a6bad511b8beed64c0d85d524ddce36453636c6f028dcfe3beea0998006b     147,808  pca_mean.npy
+b3b301c7b45b13cb0e6f4aeb8a3e6cd1cd5621fa3766294c764ca4c0eabaaa68       1,728  pca_singular_values.npy
+28fe413f72c08324f2c66b0012f7c3ce8c6f81cdc3b825a7a1acb8c885181518   6,875,328  ridge_coef.npy
+67054b179bd5994a201cdd4074b82b9b81af279b26995c00aafee80ed702a32c      34,504  ridge_intercept.npy
+4710e620f21a3ff5d44ec4ac34fb29c56a5304dc29c1f53c568e0dcc8137f689     147,808  scaler_mean.npy
+43f4d95c1a3a04958b16ea3abd784d68070e609ab689255dca163f7f95377a6c     147,808  scaler_scale.npy
+5b9ac1a51fbb9ae4a44cca7709a743148086c5377302c8b5b8c969d607130046     147,808  scaler_var.npy
+b48c27905d515c23b7cac0dc7b255b473cf70ceb99d793934633e89a39d3b747      85,878  target_names.json
+
+# data/processed/reconstructed_fitted/head_ridge_head/
+78ac700b07da5138fe5326072ae4169fa4295353863a6abcd66f9c42cace3480       7,575  feature_names.json
+8752089a9c2b9d3fdcf79be4a15a2537ba129aa7b44827cfba9eb5a030b1a5d7       6,272  impute_mean.npy
+3fceecc9faec1320048a00e972d4b5a38d7cc3ffaed6ff83dd928e98fa182a05       5,941  manifest.json
+1de29dfaf0ce2780e04abef4a301874f699e0da03f9cdb9e68e44a13794ef84a  26,400,896  ridge_coef.npy
+cb8e87fc6d8cf2693f9ff76ce9550314977ee212af29b884e5b45a9c4905db17      34,504  ridge_intercept.npy
+f96f71b77dace8ea238914980db71d899b2f0fb51584ea1de737f256699be9d7       6,272  scaler_mean.npy
+50ed258adb22944ad3f71d162a99dd427aa108f987ad77b124e95febd687045f       6,272  scaler_scale.npy
+48f8f2f513d0b2354149b54b3e22e3dfaba26e27db149d80cb5731e9d4a7fa4e       6,272  scaler_var.npy
+b48c27905d515c23b7cac0dc7b255b473cf70ceb99d793934633e89a39d3b747      85,878  target_names.json
+```
+
+`impute_mean.npy` == `scaler_mean.npy` (identical SHA-256) because
+`data/processed/expression.npz` has no NaNs, so the train-mean impute vector equals the
+`StandardScaler` mean exactly; both are kept because imputation is conceptually a distinct,
+earlier step and is needed for an external sample with missing genes. `target_names.json`
+is identical across the two model directories (same 4,297 targets, same order).

@@ -392,6 +392,17 @@ OUTCOME_STATUS_UNAVAILABLE = "unavailable"
 # sample_profile.py's Ensembl-first gene-ID reconciliation reads the same file.
 ENSEMBL_MAP_FILE = PROCESSED_DIR / "ensembl_map.csv"
 
+# Reconstructed fitted state for the two frozen Phase 1 linear models
+# (baseline ridge_pca, Geneformer ridge_head). These are NOT the original
+# Phase 1 fitted objects -- those were never serialised. They are
+# "reconstructed fitted state at the frozen Phase 1 alpha from the unchanged
+# frozen training data": scaler/PCA/ridge re-fit on exactly the committed
+# train split, at the alpha READ FROM baseline_results.json / head_results.json
+# (no hyperparameter selection), then serialised as plain .npy arrays plus a
+# JSON manifest. Built by reconstruct_fitted.py; loaded (no fit()) by
+# fitted_artifacts.py. See capstone/data-integrity-hashes.md.
+RECONSTRUCTED_FITTED_DIR = PROCESSED_DIR / "reconstructed_fitted"
+
 # Ranking / evidence display thresholds.
 TOP_N_DEPENDENCIES = 25     # genes shown per sample in the ranked-dependency table
 TOP_K_EVIDENCE_PER_GENE = 5  # interaction records shown per gene, per direction tier

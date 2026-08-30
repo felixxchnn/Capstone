@@ -1,0 +1,139 @@
+{
+  "arrays": {
+    "impute_mean": {
+      "dtype": "float64",
+      "file": "impute_mean.npy",
+      "sha256": "8752089a9c2b9d3fdcf79be4a15a2537ba129aa7b44827cfba9eb5a030b1a5d7",
+      "shape": [
+        768
+      ]
+    },
+    "ridge_coef": {
+      "dtype": "float64",
+      "file": "ridge_coef.npy",
+      "sha256": "1de29dfaf0ce2780e04abef4a301874f699e0da03f9cdb9e68e44a13794ef84a",
+      "shape": [
+        4297,
+        768
+      ]
+    },
+    "ridge_intercept": {
+      "dtype": "float64",
+      "file": "ridge_intercept.npy",
+      "sha256": "cb8e87fc6d8cf2693f9ff76ce9550314977ee212af29b884e5b45a9c4905db17",
+      "shape": [
+        4297
+      ]
+    },
+    "scaler_mean": {
+      "dtype": "float64",
+      "file": "scaler_mean.npy",
+      "sha256": "f96f71b77dace8ea238914980db71d899b2f0fb51584ea1de737f256699be9d7",
+      "shape": [
+        768
+      ]
+    },
+    "scaler_scale": {
+      "dtype": "float64",
+      "file": "scaler_scale.npy",
+      "sha256": "50ed258adb22944ad3f71d162a99dd427aa108f987ad77b124e95febd687045f",
+      "shape": [
+        768
+      ]
+    },
+    "scaler_var": {
+      "dtype": "float64",
+      "file": "scaler_var.npy",
+      "sha256": "48f8f2f513d0b2354149b54b3e22e3dfaba26e27db149d80cb5731e9d4a7fa4e",
+      "shape": [
+        768
+      ]
+    }
+  },
+  "base_commit": "12fab80a705d0adf473ca07dd9b455f1b807fc35",
+  "environment": {
+    "numpy": "2.5.0",
+    "pandas": "3.0.3",
+    "python": "3.14.6",
+    "scikit_learn": "1.9.0",
+    "scipy": "1.18.0"
+  },
+  "estimator_params": {
+    "Ridge": {
+      "alpha": 3162.0,
+      "copy_X": true,
+      "fit_intercept": true,
+      "max_iter": null,
+      "positive": false,
+      "random_state": null,
+      "solver": "auto",
+      "tol": 0.0001
+    },
+    "StandardScaler": {
+      "copy": true,
+      "with_mean": true,
+      "with_std": true
+    }
+  },
+  "feature_order": {
+    "file": "feature_names.json",
+    "n_features": 768,
+    "sha256": "c1dfea423cceb1cdc2b5d09a01bc6ab23858fc0a4599f2911e4a3376a944ccba",
+    "source": "geneformer_embeddings.csv columns (0..767)"
+  },
+  "frozen_alpha": {
+    "recorded_alpha_at_grid_boundary": false,
+    "recorded_alpha_selected_on": "grouped 5-fold CV inside the training set",
+    "selection": "read verbatim from the committed results; NOT re-selected",
+    "source_file": "data/processed/head_results.json",
+    "source_json_path": "tasks.crispr.models.ridge_head.alpha",
+    "value": 3162.0
+  },
+  "generated_by": "reconstruct_fitted.py",
+  "input_artifact_sha256": {
+    "data/processed/baseline_results.json": "b49169bd363a596f400b4faff8c21d354275b70404efe08b9109d38f1bdc0ffd",
+    "data/processed/crispr_effect.labels.json": "165906f07e61819c8fadb2bf3c95a73817e538a22a34f63c415a30222ac49b9f",
+    "data/processed/crispr_effect.npz": "9214efa3ce172079e6ce4ca78853d8bf92fb8f6d4a55d0c6c71e4653b59e8826",
+    "data/processed/expression.labels.json": "d18005cc0aec3e4d5f0fd06c748ef66672256cd8c7a6f24ea4c441b0ca785983",
+    "data/processed/expression.npz": "3d5bfa0c3430584f8943fd2365be0eecf8b994b38bfc7d491d59d7b9ff251a2d",
+    "data/processed/geneformer_embeddings.csv": "af8ee6d734bea11101d07884f1c72d2b4efaff9875506738a037102a712f1e46",
+    "data/processed/head_results.json": "1962206fa17646cbd1fec4b642a577cc2586c09c4cabd980541a7e11a8b6f894",
+    "data/processed/model_metadata.csv": "1c314197b57c1f8363eb44f8902b3733777e7c304d7f677c76d401e3cabe5180",
+    "data/processed/selective_genes.json": "68c8fe39ae8965ce20b04f50870609cc21734386ceeff859f4d0bddd2e5bab35",
+    "data/processed/splits.json": "f1419abc7cbd31efc173a5857bab9eb318b53f8e535a17048bfcf0ea2f70aeef"
+  },
+  "model": "head_ridge_head",
+  "not_original_note": "These are NOT the original Phase 1 fitted objects -- those were never serialised. Scaler/PCA/Ridge were re-fit on exactly the committed train split, at the alpha read from the committed results file (no hyper-parameter selection). Verified to reproduce the committed Phase 1 validation metrics at the recorded precision.",
+  "output_sha256": {
+    "feature_names.json": "78ac700b07da5138fe5326072ae4169fa4295353863a6abcd66f9c42cace3480",
+    "impute_mean.npy": "8752089a9c2b9d3fdcf79be4a15a2537ba129aa7b44827cfba9eb5a030b1a5d7",
+    "ridge_coef.npy": "1de29dfaf0ce2780e04abef4a301874f699e0da03f9cdb9e68e44a13794ef84a",
+    "ridge_intercept.npy": "cb8e87fc6d8cf2693f9ff76ce9550314977ee212af29b884e5b45a9c4905db17",
+    "scaler_mean.npy": "f96f71b77dace8ea238914980db71d899b2f0fb51584ea1de737f256699be9d7",
+    "scaler_scale.npy": "50ed258adb22944ad3f71d162a99dd427aa108f987ad77b124e95febd687045f",
+    "scaler_var.npy": "48f8f2f513d0b2354149b54b3e22e3dfaba26e27db149d80cb5731e9d4a7fa4e",
+    "target_names.json": "b48c27905d515c23b7cac0dc7b255b473cf70ceb99d793934633e89a39d3b747"
+  },
+  "pipeline": "impute(train-mean) -> StandardScaler -> multi-output Ridge",
+  "reconstruction_status": "reconstructed fitted state at the frozen Phase 1 alpha from the unchanged frozen training data",
+  "resolved_solvers": {
+    "Ridge_solver": "auto -> cholesky (dense multi-output, no sample_weight)"
+  },
+  "scaler_n_samples_seen": 800,
+  "schema_version": "reconstructed-fitted/1",
+  "target_order": {
+    "file": "target_names.json",
+    "n_targets": 4297,
+    "sha256": "cc49219ee2f7eab7023fa5478f1e7dc7cce3641eaf96167d4f8369407fb26474",
+    "source": "selective_genes.json 'genes', filtered to crispr_effect columns, order preserved"
+  },
+  "train_split": {
+    "disjoint_from_val_test": true,
+    "n_test_lines": 170,
+    "n_train_lines": 800,
+    "n_val_lines": 170,
+    "no_val_or_test_row_used_for_fitting": true,
+    "row_source": "sorted(geneformer_embeddings.index intersect crispr[selective].index), then splits.json assignment == 'train'",
+    "train_model_ids_sha256": "8df915c92d9ab2c17a959555c2b313b4549b2ff840ec5f1d7f453f54f5580fad"
+  }
+}
