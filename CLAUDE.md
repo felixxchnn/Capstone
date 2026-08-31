@@ -201,7 +201,7 @@ Twenty-one modules today; Phase 2 (§9.7) adds more. Seventeen have been read in
 | `baseline.py` | `prepare_task`, `impute_with_train_mean`, `per_target_spearman`, `evaluate`, `run_global_mean`, `run_lineage_mean`, `run_ridge_pca`, `_select_alpha_inner_cv`, `save_prediction_bundle`, `verify_prediction_bundle` | yes |
 | `train_head.py` | `load_embeddings`, `prepare_task`, `run_ridge_head`, `run_mlp_head`, `HEAD_RIDGE_ALPHAS` | yes |
 | `analysis.py` | A1–A4: bootstrap CI, Wilcoxon, per-target correlation, effective df; `--fast` vectorised path | yes (authored) |
-| `random_projection.py` | E1 control (§9.3), **validation-only, exploratory**. `_fit_project_predict`: `baseline.impute_with_train_mean` → `StandardScaler`[train] → `GaussianRandomProjection(n_components=768, random_state=config.RANDOM_SEED)`[fit on standardized train] → `train_head.run_ridge_head` (its own `StandardScaler` + Ridge + patient-grouped inner-CV alpha on `HEAD_RIDGE_ALPHAS`) → `baseline.evaluate` on the 170 val lines. Writes `data/processed/random_projection_results.json` (schema `random-projection-control/1`, CRLF, deterministic within the recorded env). Gates every input against `EXPECTED_INPUT_SHA256`; hard-asserts 800/170/4297/18460/768, disjoint train/val, no patient group across the boundary, interior alpha, finite projection, projected-variance ≈ 18460/768. **No `--split test` path exists.** `--run` / `--run --save-predictions` (gitignored bundle, round-trip re-scored) / `--validate` (18 fail-closed checks incl. byte-identical recompute + protected-artifact hashes) / `--self-test` / `--check-determinism`. Carries its own validation — `checks.py` stays 55. | yes (authored) |
+| `random_projection.py` | E1 control (§9.3), **validation-only, exploratory**. `_fit_project_predict`: `baseline.impute_with_train_mean` → `StandardScaler`[train] → `GaussianRandomProjection(n_components=768, random_state=config.RANDOM_SEED)`[fit on standardized train] → `train_head.run_ridge_head` (its own `StandardScaler` + Ridge + patient-grouped inner-CV alpha on `HEAD_RIDGE_ALPHAS`) → `baseline.evaluate` on the 170 val lines. Writes `data/processed/random_projection_results.json` (schema `random-projection-control/1`, **LF**, sha256 `4adfb78b…`, 9,993 B). Gates every input against `EXPECTED_INPUT_SHA256`; hard-asserts 800/170/4297/18460/768, disjoint train/val, no patient group across the boundary, interior alpha, finite projection, projected-variance ≈ 18460/768. Component hash forces `<f8` (little-endian float64, C-order, no `.npy` header). **No `--split test` path exists.** `--run` / `--run --save-predictions` (gitignored bundle, round-trip re-scored) / `--validate` (18 checks, full numerical regen — **fails closed unless the runtime stack == `EXPECTED_E1_ENVIRONMENT`**, i.e. Python 3.14.6 + `requirements-e1.txt`; seeded projection components are not byte-stable across NumPy/scikit-learn versions) / `--validate-artifact` (24 portable checks: no recompute, runs anywhere) / `--self-test` (portable) / `--check-determinism`. Carries its own validation — `checks.py` stays 55. | yes (authored) |
 | `gene_ids.py` | `parse_gene_label`, `intersect_gene_spaces`, `canonical_labels`, `map_external_matrix` — Entrez is the join key throughout; no Ensembl handling here (see `prepare_geneformer_input.py`). `map_external_matrix`'s `fill_value` defaults to `0.0`, not NaN — callers reindexing a truly external sample must override it or "missing" and "measured zero" silently collide. Its symbol-matching pass uses `lookup.setdefault`, so duplicate external symbols silently keep whichever is seen first. For those two reasons `sample_profile.py` does its own canonical reindex rather than calling `map_external_matrix`. | yes |
 | `build_dataset.py` | Joins DepMap CSVs into the processed matrices; `expression.npz` is `log2(TPM+1)`, confirmed both from this module's docstring and from the committed values (max 15.37) | yes (expression/CRISPR/metadata/PRISM loaders and the osteosarcoma section) |
 | `prepare_geneformer_input.py` | Reconstructs pseudo-counts from log-TPM (`TPM = 2**log_tpm - 1`) since Geneformer wants raw counts and DepMap ships log-TPM; maps canonical `SYMBOL (ENTREZ)` to Ensembl via `ensembl_map.csv` (columns `entrez,ensembl_id`). The frozen Kaggle embeddings used a `mygene`-built map with 18,460/18,460 zero attrition, and that Kaggle cache was never carried back here. `data/processed/ensembl_map.csv` **now exists** — committed in `d78fbf8`, rebuilt from the static NCBI `gene2ensembl` reference (not `mygene`), coverage **18,459/18,460**; the one gap is Entrez `79400` (NOX5), which NCBI carries no Ensembl xref for. A local `prepare_geneformer_input` re-run would therefore drop NOX5 (`genes_dropped_no_ensembl == 1`); the frozen `geneformer_embeddings.csv` is unaffected. Full provenance: `capstone/data-integrity-hashes.md`. | yes |
@@ -311,7 +311,7 @@ and on one seeded resample with ties before being trusted; `--fast --bootstrap 1
 reproduces the committed `analysis_results.json` byte-for-byte. Measured ~10.6× faster
 (259.8s → 24.5s at 50 resamples). **Do not re-run this as new work.**
 
-### 9.3 E1 — random projection control — DONE (committed; commit after `5db198b`)
+### 9.3 E1 — random projection control — DONE (committed; commit after `5db198b`; reproducibility repair after `e57a17d`)
 
 Implemented as `random_projection.py` (§7). `GaussianRandomProjection(n_components=768,
 random_state=config.RANDOM_SEED)` on train-standardised expression, then
@@ -321,9 +321,8 @@ the 170 val lines. **Validation-only, exploratory** — no `--split test` path; 
 on the same 170 val lines, so the val-set-optimism caveat (§11) applies.
 
 **Result** (`data/processed/random_projection_results.json`, schema
-`random-projection-control/1`, sha256 `915c4234ee6e54783d89a149fb8420d0d7fed3e00cf707855d24563cfe5ea6f7`,
-9,436 B; run on Python 3.14.6 / numpy 2.5.0 / scipy 1.18.0 / scikit-learn 1.9.0 / pandas
-3.0.3):
+`random-projection-control/1`, **LF**, sha256
+`4adfb78b24f613adf826e7202272bbe5d95fcb9001d2f46d80567f1af319d186`, 9,993 B):
 
 | | val Spearman mean |
 |---|---|
@@ -334,18 +333,35 @@ on the same 170 val lines, so the val-set-optimism caveat (§11) applies.
 
 Selected alpha **3162** — interior, identical to the Geneformer head; the inner-CV sweep is
 unimodal (grid-min 1.0 → 0.0638, peak 3162 → 0.2066, grid-max 1e6 → 0.1767). Projected-column
-variance mean **24.21**, consistent with the 18,460/768 ≈ 24.04 scale (ratio 1.007). Byte-identical
-on rebuild (`--check-determinism`); `--validate` = 18/18.
+variance mean **24.21**, consistent with the 18,460/768 ≈ 24.04 scale (ratio 1.007).
+Projection-component SHA-256 `d751f201d221c1b87048f9ef83fd93d91c810a98cbaabe2c9f14dd1c03828c38`
+(byte convention: little-endian IEEE-754 float64, C-order, no `.npy` header).
+
+**Reproducibility is environment-pinned (repair after `e57a17d`).** A fixed integer seed is
+*not* sufficient: seeded `GaussianRandomProjection` components are not byte-stable across
+NumPy / scikit-learn versions — an independent checkout on Python 3.12.13 / numpy 2.3.5 /
+pandas 2.2.3 / scipy 1.17.0 / scikit-learn 1.8.0 produced component hash `4eda5c12…` and
+16/18 on `--validate`. Exact numerical regeneration (`--run`, full `--validate`,
+`--check-determinism`) now requires `random_projection.EXPECTED_E1_ENVIRONMENT` — Python
+3.14.6 + the pins in `requirements-e1.txt` (numpy 2.5.0, pandas 3.0.3, scipy 1.18.0,
+scikit-learn 1.9.0) — and the module fails closed with a pointer to that file if the runtime
+stack differs. `--validate-artifact` (24 checks) is the portable path: strict JSON, schema,
+pinned result + component hashes, input + protected-artifact hashes, recorded environment,
+counts + split labels, alpha grid/sweep, interior alpha, metrics, references, deltas,
+no-test-evaluation, softened interpretation — no recompute, runs anywhere.
+`--check-determinism` byte-identical; full `--validate` = 18/18 in the pinned env.
 
 **Reading (the outcome older documents treated as unlikely, and it is accepted as reported).**
 A single fixed random 768-dim linear sketch of expression **matches — very slightly exceeds
 (+0.0057, one seed, not bootstrapped) — the frozen Geneformer embedding** under a matched
-linear head, and **both still lose to PCA-200** (−0.0252). So the embedding's deficit versus
-PCA is *not* explained by the 768-dim bottleneck itself: a random bottleneck of the same
-width does not pay that price. This does not beat PCA and is not framed as beating the head;
-it is "no worse than the pretrained embedding at matched width." An unexpected result here
-is a real finding, not a broken one, and is not to be re-run under another seed or altered
-because of how it came out.
+linear head, and **both still lose to PCA-200** (−0.0252). This result makes bottleneck
+width alone an unlikely explanation for Geneformer's deficit and is consistent with the
+learned representation discarding or distorting useful expression signal. Because E1 uses one
+projection seed and the +0.0057 difference was not given its own paired uncertainty
+analysis, it does **not** establish a causal mechanism or prove that random projection is
+superior. This does not beat PCA and is not framed as beating the head. An unexpected result
+here is a real finding, not a broken one, and is not to be re-run under another seed or
+altered because of how it came out.
 
 Model-set freeze (§9.6) and the one-time final test-split evaluation (F1) remain outstanding
 and are unaffected by E1.

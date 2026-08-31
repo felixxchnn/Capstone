@@ -1,0 +1,35 @@
+# requirements-e1.txt
+# ===================
+# EXACT library stack for byte-for-byte numerical regeneration of the E1
+# random-projection control (random_projection.py --run / --validate /
+# --check-determinism, and data/processed/random_projection_results.json).
+#
+# This is NOT the project's general install. For everything else, follow the
+# "Quick start" in README.md (pandas / numpy / scipy / scikit-learn, unpinned).
+#
+# Why pins are required for E1, and only for E1
+# --------------------------------------------------------------------------
+# A fixed integer seed does NOT make scikit-learn's GaussianRandomProjection
+# components byte-identical across NumPy / scikit-learn versions: the seeded
+# random matrix is drawn through NumPy's Generator/BitGenerator machinery, whose
+# exact byte stream has changed between releases. An independent clean checkout
+# on Python 3.12.13 / numpy 2.3.5 / pandas 2.2.3 / scipy 1.17.0 /
+# scikit-learn 1.8.0 produced a DIFFERENT projection-component SHA-256
+# (4eda5c12... vs the committed d751f201...) and 16/18 on `--validate`.
+#
+# The committed E1 numbers (Spearman 0.2104, selected alpha 3162, component hash
+# d751f201..., deltas -0.0252 / +0.0057 / +0.0604) reproduce exactly only on the
+# stack below. `random_projection.py` enforces this: `--run`, full `--validate`
+# and `--check-determinism` refuse to recompute outside it and point here.
+#
+# `random_projection.py --validate-artifact` is the portable check -- it
+# verifies the committed artifact's structure, provenance and pinned
+# fingerprints on ANY environment, without recomputing the projection.
+#
+# Interpreter (not pip-installable; install separately): Python 3.14.6
+# --------------------------------------------------------------------------
+
+numpy==2.5.0
+pandas==3.0.3
+scipy==1.18.0
+scikit-learn==1.9.0

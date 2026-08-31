@@ -5,9 +5,21 @@ E1 -- the pre-planned random-projection control (CLAUDE.md section 9.3).
 
     py random_projection.py --run                 # compute + write the val result
     py random_projection.py --run --save-predictions
-    py random_projection.py --validate            # re-run, byte-compare, fail closed
-    py random_projection.py --self-test           # synthetic, offline
+    py random_projection.py --validate-artifact    # portable: structure + provenance, no recompute
+    py random_projection.py --validate            # full numerical regen; needs the pinned env
+    py random_projection.py --self-test           # synthetic, offline, portable
     py random_projection.py --check-determinism    # build twice, require identical JSON
+
+Reproducibility environment
+---------------------------
+A fixed integer seed does **not** make sklearn's ``GaussianRandomProjection``
+components byte-identical across NumPy / scikit-learn versions.  The committed
+projection-component hash reproduces only under the exact stack recorded in
+``EXPECTED_E1_ENVIRONMENT`` (Python 3.14.6 + the pins in ``requirements-e1.txt``:
+numpy 2.5.0, pandas 3.0.3, scipy 1.18.0, scikit-learn 1.9.0).  ``--run``, full
+``--validate`` and ``--check-determinism`` refuse to recompute outside that
+stack and point the user at ``requirements-e1.txt``.  ``--validate-artifact``
+and ``--self-test`` are portable and never recompute the real projection.
 
 Scientific question
 -------------------
@@ -104,6 +116,52 @@ REFERENCE_EXPECTED = {
     "lineage_mean_spearman_mean": 0.15,
 }
 
+# The one authoritative environment in which the committed E1 numbers regenerate
+# byte-for-byte. A fixed seed is NOT enough: sklearn's GaussianRandomProjection
+# draws its matrix through NumPy's Generator/BitGenerator machinery, whose exact
+# byte stream has changed across NumPy releases, so the seeded component matrix
+# -- and therefore its SHA-256 -- differs between versions. An independent
+# checkout on Python 3.12.13 / numpy 2.3.5 / pandas 2.2.3 / scipy 1.17.0 /
+# scikit-learn 1.8.0 produced a different component hash and 16/18 on --validate.
+# requirements-e1.txt pins the library half; Python 3.14.6 is the interpreter.
+EXPECTED_E1_ENVIRONMENT = {
+    "python": "3.14.6",
+    "numpy": "2.5.0",
+    "pandas": "3.0.3",
+    "scipy": "1.18.0",
+    "scikit_learn": "1.9.0",
+}
+
+# Approved, committed E1 artifact fingerprints. --validate-artifact checks the
+# committed random_projection_results.json against these WITHOUT recomputing the
+# projection, so it runs anywhere. These describe the LF-terminated artifact
+# regenerated under EXPECTED_E1_ENVIRONMENT; the numbers below never change
+# without a deliberate, reviewed re-approval.
+RESULT_SHA256 = (
+    "4adfb78b24f613adf826e7202272bbe5d95fcb9001d2f46d80567f1af319d186"
+)
+RESULT_SIZE_BYTES = 9993
+COMPONENT_SHA256 = (
+    "d751f201d221c1b87048f9ef83fd93d91c810a98cbaabe2c9f14dd1c03828c38"
+)
+RESULT_SPEARMAN_MEAN = 0.2104
+RESULT_SELECTED_ALPHA = 3162.0
+RESULT_DELTAS = {
+    "random_projection_minus_ridge_pca": -0.0252,
+    "random_projection_minus_ridge_head": 0.0057,
+    "random_projection_minus_lineage_mean": 0.0604,
+}
+# Softened interpretation (one seed, no paired uncertainty analysis on the
+# +0.0057). Stored verbatim in the artifact and checked by --validate-artifact.
+RESULT_INTERPRETATION = (
+    "This result makes bottleneck width alone an unlikely explanation for "
+    "Geneformer's deficit and is consistent with the learned representation "
+    "discarding or distorting useful expression signal. Because E1 uses one "
+    "projection seed and the +0.0057 difference was not given its own paired "
+    "uncertainty analysis, it does not establish a causal mechanism or prove "
+    "that random projection is superior."
+)
+
 # Exact SHA-256 of every committed input this control consumes. If any no longer
 # matches, a frozen Phase 1 artifact has moved and the build hard-fails rather
 # than quietly producing a control against a changed baseline.
@@ -149,6 +207,11 @@ class RandomProjectionControlError(RuntimeError):
     """Raised on any integrity failure in this module (fail closed, never skip)."""
 
 
+class E1EnvironmentError(RandomProjectionControlError):
+    """The runtime library stack differs from EXPECTED_E1_ENVIRONMENT, so a
+    real-data recompute cannot reproduce the committed component hash."""
+
+
 # --------------------------------------------------------------------------
 # small helpers
 # --------------------------------------------------------------------------
@@ -161,17 +224,24 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+COMPONENT_SHA256_BYTE_CONVENTION = (
+    "hashlib.sha256 over "
+    "numpy.ascontiguousarray(components_, dtype='<f8').tobytes(order='C') -- "
+    "little-endian IEEE-754 float64, C-order, no .npy header; "
+    "768x18460 row-major matrix"
+)
+
+
 def _component_sha256(components: np.ndarray) -> str:
     """
     Deterministic SHA-256 of the projection component matrix.
 
-    Byte convention (documented, stable): the matrix is cast to float64 and made
-    C-contiguous, then hashed over ``ndarray.tobytes(order="C")`` -- i.e. the
-    raw little-endian IEEE-754 doubles of a ``n_components x n_features``
-    row-major array.  numpy's ``.npy`` header is deliberately *not* included, so
-    the digest depends only on the numeric content and its shape-implied order.
+    Byte convention (documented, stable): little-endian IEEE-754 float64,
+    C-order, no ``.npy`` header. ``dtype="<f8"`` forces little-endian
+    explicitly so the digest is identical on a big-endian host; the array is
+    made C-contiguous and hashed over ``ndarray.tobytes(order="C")``.
     """
-    arr = np.ascontiguousarray(np.asarray(components, dtype=np.float64))
+    arr = np.ascontiguousarray(np.asarray(components, dtype="<f8"))
     return hashlib.sha256(arr.tobytes(order="C")).hexdigest()
 
 
@@ -196,9 +266,11 @@ def _result_text(payload: dict) -> str:
 
 
 def _result_bytes(payload: dict) -> bytes:
-    # Explicit CRLF bytes so the artifact is byte-identical on any platform
-    # (data/processed/** is marked -text in .gitattributes). Matches case_study.json.
-    return _result_text(payload).replace("\n", "\r\n").encode("utf-8")
+    # Explicit LF bytes. data/processed/** is marked -text in .gitattributes, so
+    # exactly these bytes are committed on every platform; LF (not CRLF) keeps a
+    # POSIX `git diff --check` from flagging every added line as a trailing CR.
+    # (case_study.json keeps its own deliberate CRLF convention -- not this file.)
+    return _result_text(payload).encode("utf-8")
 
 
 def _write_result(payload: dict, path: Path) -> None:
@@ -215,6 +287,45 @@ def _environment() -> dict:
         "scikit_learn": sklearn.__version__,
         "pandas": pd.__version__,
     }
+
+
+def _assert_e1_environment() -> None:
+    """
+    Gate every real-data numerical recompute (--run, full --validate,
+    --check-determinism). A fixed seed does NOT make GaussianRandomProjection
+    byte-stable across NumPy / scikit-learn versions, so the committed component
+    hash only reproduces under EXPECTED_E1_ENVIRONMENT. Fails BEFORE any
+    projection or ridge fit. Portable checks (--validate-artifact, --self-test)
+    never call this.
+    """
+    observed = _environment()
+    mismatch = [
+        k for k in EXPECTED_E1_ENVIRONMENT
+        if observed.get(k) != EXPECTED_E1_ENVIRONMENT[k]
+    ]
+    if not mismatch:
+        return
+    lines = [
+        "E1 numerical regeneration requires the exact pinned environment.",
+        "Seeded sklearn GaussianRandomProjection components are NOT byte-stable",
+        "across NumPy / scikit-learn versions, so the committed projection hash",
+        "(and full --validate) only reproduce on the stack below.",
+        "",
+        f"  {'component':<14} {'expected':<12} observed",
+        f"  {'-' * 14} {'-' * 12} {'-' * 20}",
+    ]
+    for k in EXPECTED_E1_ENVIRONMENT:
+        exp = EXPECTED_E1_ENVIRONMENT[k]
+        got = observed.get(k)
+        flag = "" if exp == got else "   <- mismatch"
+        lines.append(f"  {k:<14} {exp:<12} {got}{flag}")
+    lines += [
+        "",
+        "Fix: install the pinned library stack from requirements-e1.txt on",
+        "Python 3.14.6, then retry -- or run `--validate-artifact` for a portable",
+        "structural / provenance check that does not recompute the projection.",
+    ]
+    raise E1EnvironmentError("\n".join(lines))
 
 
 def _estimator_params(est) -> dict:
@@ -350,6 +461,7 @@ def run(processed_dir: Path | str = config.PROCESSED_DIR,
     dict and ``artifacts`` carries the arrays needed for --save-predictions.
     Writing to disk is the caller's job.
     """
+    _assert_e1_environment()          # fail before any expensive projection / fit
     processed_dir = Path(processed_dir)
     input_hashes = _verify_inputs(processed_dir)
 
@@ -572,12 +684,7 @@ def run(processed_dir: Path | str = config.PROCESSED_DIR,
             "components_shape": [int(components.shape[0]), int(components.shape[1])],
             "components_dtype": str(components.dtype),
             "components_sha256": _component_sha256(components),
-            "components_sha256_byte_convention": (
-                "hashlib.sha256 over "
-                "numpy.ascontiguousarray(components_, dtype=float64)"
-                ".tobytes(order='C') -- raw little-endian IEEE-754 doubles of "
-                "the 768x18460 row-major matrix; no .npy header"
-            ),
+            "components_sha256_byte_convention": COMPONENT_SHA256_BYTE_CONVENTION,
             "distribution": (
                 "sklearn draws entries i.i.d. from N(0, 1/n_components) = N(0, 1/768)"
             ),
@@ -636,6 +743,7 @@ def run(processed_dir: Path | str = config.PROCESSED_DIR,
             "random_projection_minus_lineage_mean":
                 round(rp_spearman - ref_read["lineage_mean_spearman_mean"], _ROUND_DP),
         },
+        "interpretation": RESULT_INTERPRETATION,
         "environment": _environment(),
         "determinism": (
             "Byte-identical on rebuild within the recorded environment: "
@@ -662,6 +770,11 @@ def run(processed_dir: Path | str = config.PROCESSED_DIR,
             "Reproducibility is asymmetric: the baseline arm and this control "
             "reproduce end to end from the public repo; the Geneformer arm's "
             "embeddings do not (Kaggle GPU artifact).",
+            "Byte-exact regeneration of the projection needs the pinned stack in "
+            "requirements-e1.txt on Python 3.14.6: a fixed seed alone does not "
+            "make sklearn's GaussianRandomProjection components identical across "
+            "NumPy / scikit-learn versions. Portable structural / provenance "
+            "verification is `random_projection.py --validate-artifact`.",
             "The projected-feature spectrum (variance ~24 per column) is a "
             "third spectrum, between the head's unit-variance embeddings and "
             "the baseline's PCA eigenvalues; alpha is selected on its own "
@@ -734,7 +847,198 @@ def save_predictions(artifacts: dict,
 
 
 # --------------------------------------------------------------------------
+# validate-artifact: portable structural / provenance checks, NO recompute
+# --------------------------------------------------------------------------
+
+def validate_artifact(processed_dir: Path | str = config.PROCESSED_DIR,
+                      result_file: Path | str = RESULT_FILE,
+                      *, verbose: bool = True) -> dict:
+    """
+    Validate the committed random_projection_results.json without recomputing
+    the projection or the ridge fit -- so it runs on ANY environment, not just
+    EXPECTED_E1_ENVIRONMENT. Structural, provenance and pinned-fingerprint
+    checks only. The full numerical regeneration + byte-compare is ``validate``.
+    """
+    processed_dir = Path(processed_dir)
+    result_file = Path(result_file)
+    root = processed_dir.parent.parent
+    checks: list[tuple[str, bool, str]] = []
+
+    def _c(name: str, ok: bool, detail: str = "") -> None:
+        checks.append((name, bool(ok), detail))
+        if verbose:
+            print(f"  [{'ok' if ok else 'FAIL'}] {name}" + (f"  -- {detail}" if detail else ""))
+
+    def _done() -> dict:
+        n_fail = sum(1 for _, ok, _ in checks if not ok)
+        return {"checks": checks, "n_fail": n_fail, "n_pass": len(checks) - n_fail}
+
+    # 1. present
+    if not result_file.is_file():
+        _c("random_projection_results.json present", False, f"missing: {result_file}")
+        return _done()
+    _c("random_projection_results.json present", True)
+
+    # 2. strict JSON
+    try:
+        committed = _load_strict_json(result_file)
+        _c("parses under strict JSON (no NaN / Infinity)", True)
+    except RandomProjectionControlError as exc:
+        _c("parses under strict JSON (no NaN / Infinity)", False, str(exc))
+        return _done()
+
+    # 3. schema
+    _c("schema == random-projection-control/1",
+       committed.get("schema") == SCHEMA_VERSION, f"schema={committed.get('schema')!r}")
+
+    # 4. committed result SHA-256 + size (pinned; LF artifact)
+    raw = result_file.read_bytes()
+    got_sha = hashlib.sha256(raw).hexdigest()
+    _c("committed result SHA-256 == RESULT_SHA256",
+       got_sha == RESULT_SHA256, f"{got_sha} vs pinned {RESULT_SHA256}")
+    _c("committed result size == RESULT_SIZE_BYTES",
+       len(raw) == RESULT_SIZE_BYTES, f"{len(raw)} vs pinned {RESULT_SIZE_BYTES}")
+    _c("committed result is LF-terminated (no CRLF)",
+       b"\r\n" not in raw, "" if b"\r\n" not in raw else "file contains CRLF bytes")
+
+    # 5. all committed input hashes still match
+    try:
+        _verify_inputs(processed_dir)
+        _c("committed Phase 1 inputs unchanged (EXPECTED_INPUT_SHA256)", True)
+    except RandomProjectionControlError as exc:
+        _c("committed Phase 1 inputs unchanged (EXPECTED_INPUT_SHA256)", False, str(exc))
+    ia = committed.get("input_artifact_sha256", {})
+    _c("recorded input_artifact_sha256 == EXPECTED_INPUT_SHA256",
+       ia == EXPECTED_INPUT_SHA256, f"{sorted(set(ia) ^ set(EXPECTED_INPUT_SHA256))}")
+
+    # 6. protected Phase 1 + Phase 2 artifacts unchanged
+    bad = []
+    for rel, want in PROTECTED_ARTIFACT_SHA256.items():
+        p = root / rel
+        if not p.is_file():
+            bad.append(f"{rel}: missing")
+        elif _sha256_file(p) != want:
+            bad.append(f"{rel}: changed")
+    _c("protected artifacts unchanged (analysis_results.json, case_study.json, phase2_report.html)",
+       not bad, f"{bad}")
+
+    # 7. recorded environment == the required E1 environment
+    _c("recorded environment == EXPECTED_E1_ENVIRONMENT",
+       committed.get("environment") == EXPECTED_E1_ENVIRONMENT,
+       f"{committed.get('environment')}")
+
+    # 8. counts + split labels (split labels re-derived from splits.json, cheap)
+    c = committed.get("counts", {})
+    counts_ok = (c.get("n_train_lines") == 800 and c.get("n_val_lines") == 170
+                 and c.get("n_test_lines_used") == 0 and c.get("n_targets") == 4297
+                 and c.get("n_expression_features_before_projection") == 18460
+                 and c.get("n_projected_features") == 768
+                 and c.get("train_val_indices_disjoint") is True
+                 and c.get("patient_groups_crossing_train_val_boundary") == 0)
+    _c("counts: 800/170/0 lines, 4297 targets, 18460->768 features, disjoint, 0 crossing",
+       counts_ok, f"{c}")
+    try:
+        assign = _load_strict_json(processed_dir / "splits.json")["assignment"]
+        sizes = {s: sum(1 for v in assign.values() if v == s) for s in ("train", "val", "test")}
+        _c("splits.json labels: 800 train / 170 val / 170 test",
+           sizes == {"train": 800, "val": 170, "test": 170}, f"{sizes}")
+    except Exception as exc:  # noqa: BLE001
+        _c("splits.json labels: 800 train / 170 val / 170 test", False, f"{type(exc).__name__}: {exc}")
+
+    # 9. seed + projection dimensions
+    pj = committed.get("projection", {})
+    pj_dims = {k: pj.get(k) for k in
+               ("random_state", "n_components_out", "n_features_in", "components_shape")}
+    _c("seed == config.RANDOM_SEED (20260722); projection dims 768 x 18460",
+       (committed.get("seed") == config.RANDOM_SEED == 20260722
+        and pj.get("random_state") == 20260722
+        and pj.get("n_components_out") == 768
+        and pj.get("n_features_in") == 18460
+        and pj.get("components_shape") == [768, 18460]),
+       f"seed={committed.get('seed')} {pj_dims}")
+
+    # 10. committed projection-component hash == pinned COMPONENT_SHA256
+    _c("projection components_sha256 == COMPONENT_SHA256 (pinned)",
+       pj.get("components_sha256") == COMPONENT_SHA256,
+       f"{pj.get('components_sha256')} vs pinned {COMPONENT_SHA256}")
+    _c("component-hash byte convention recorded",
+       pj.get("components_sha256_byte_convention") == COMPONENT_SHA256_BYTE_CONVENTION)
+
+    # 11. full 13-point alpha grid + sweep
+    _c("alpha_grid == train_head.HEAD_RIDGE_ALPHAS (13 points)",
+       committed.get("alpha_grid") == [float(a) for a in train_head.HEAD_RIDGE_ALPHAS]
+       and committed.get("alpha_grid_n_points") == 13)
+    sweep = committed.get("alpha_sweep")
+    _c("alpha_sweep is a dict of all 13 grid points",
+       isinstance(sweep, dict) and len(sweep) == 13
+       and sorted(float(k) for k in sweep) == sorted(float(a) for a in train_head.HEAD_RIDGE_ALPHAS),
+       f"{len(sweep) if isinstance(sweep, dict) else sweep}")
+
+    # 12. selected alpha == 3162 and interior
+    _c("selected_alpha == 3162.0 and INTERIOR",
+       (committed.get("selected_alpha") == RESULT_SELECTED_ALPHA == 3162.0
+        and committed.get("selected_alpha_interior") is True
+        and committed.get("selected_alpha_at_grid_boundary") is False
+        and committed.get("selected_alpha_is_grid_min") is False
+        and committed.get("selected_alpha_is_grid_max") is False),
+       f"selected_alpha={committed.get('selected_alpha')}")
+
+    # 13. metrics + reference values
+    m = committed.get("metrics", {})
+    _c("metrics.spearman_mean == 0.2104 (pinned); headline metrics finite",
+       (m.get("spearman_mean") == RESULT_SPEARMAN_MEAN == 0.2104
+        and all(isinstance(m.get(k), (int, float)) and np.isfinite(m.get(k))
+                for k in ("spearman_median", "spearman_q25", "spearman_q75", "r2_mean"))),
+       f"spearman_mean={m.get('spearman_mean')}")
+    rv = committed.get("reference_values", {})
+    b_obj = io_utils.load_json(processed_dir / "baseline_results.json")
+    h_obj = io_utils.load_json(processed_dir / "head_results.json")
+    live = {
+        "ridge_pca_spearman_mean": b_obj["tasks"]["crispr"]["models"]["ridge_pca"]["spearman_mean"],
+        "ridge_head_spearman_mean": h_obj["tasks"]["crispr"]["models"]["ridge_head"]["spearman_mean"],
+        "lineage_mean_spearman_mean": b_obj["tasks"]["crispr"]["models"]["lineage_mean"]["spearman_mean"],
+    }
+    rv_values = {k: rv.get(k, {}).get("value") for k in REFERENCE_EXPECTED}
+    _c("reference values == expected literals == current baseline/head results",
+       all(rv_values[k] == REFERENCE_EXPECTED[k] == live[k] for k in REFERENCE_EXPECTED),
+       f"committed={rv_values} live={live}")
+
+    # 14. deltas == pinned, and == spearman_mean minus each reference
+    recomputed = {
+        "random_projection_minus_ridge_pca": round(m.get("spearman_mean", float("nan")) - REFERENCE_EXPECTED["ridge_pca_spearman_mean"], _ROUND_DP),
+        "random_projection_minus_ridge_head": round(m.get("spearman_mean", float("nan")) - REFERENCE_EXPECTED["ridge_head_spearman_mean"], _ROUND_DP),
+        "random_projection_minus_lineage_mean": round(m.get("spearman_mean", float("nan")) - REFERENCE_EXPECTED["lineage_mean_spearman_mean"], _ROUND_DP),
+    }
+    _c("deltas == pinned RESULT_DELTAS == spearman_mean minus each reference",
+       committed.get("deltas") == RESULT_DELTAS == recomputed,
+       f"committed={committed.get('deltas')} pinned={RESULT_DELTAS} recomputed={recomputed}")
+
+    # 15. no-test-evaluation declarations
+    st = committed.get("status", {})
+    nte = committed.get("no_test_evaluation", "")
+    _c("no-test-evaluation declarations present and val-only",
+       (st.get("test_split_touched") is False
+        and st.get("test_evaluation_performed") is False
+        and st.get("split_evaluated") == "val"
+        and isinstance(nte, str)
+        and "no --split test" in nte.lower()),
+       f"status={st} no_test_evaluation={nte[:60]!r}")
+
+    # 16. limitations + exploratory status + softened interpretation
+    _c("status.kind == 'exploratory validation control'; limitations non-empty list",
+       (st.get("kind") == "exploratory validation control"
+        and isinstance(committed.get("limitations"), list)
+        and len(committed["limitations"]) >= 3))
+    _c("interpretation == softened RESULT_INTERPRETATION (no 'rules out' claim)",
+       committed.get("interpretation") == RESULT_INTERPRETATION
+       and "rules out" not in committed.get("interpretation", "").lower())
+
+    return _done()
+
+
+# --------------------------------------------------------------------------
 # validate: re-run, byte-compare, fail closed on the full list
+#           (requires EXPECTED_E1_ENVIRONMENT -- calls run())
 # --------------------------------------------------------------------------
 
 def validate(processed_dir: Path | str = config.PROCESSED_DIR,
@@ -992,6 +1296,26 @@ def _self_test() -> int:
         pass
     print("  [ok] there is no --split test code path (argparse rejects it)")
 
+    # environment gate: silent in the pinned env, hard-fails on a version mismatch
+    _assert_e1_environment()                         # we ARE in EXPECTED_E1_ENVIRONMENT
+    _mod = sys.modules[__name__]
+    _saved_env = _mod.EXPECTED_E1_ENVIRONMENT
+    try:
+        _mod.EXPECTED_E1_ENVIRONMENT = {**_saved_env, "numpy": "0.0.0-not-real"}
+        raised = False
+        try:
+            _assert_e1_environment()
+        except E1EnvironmentError:
+            raised = True
+        assert raised, "_assert_e1_environment did not flag a version mismatch"
+    finally:
+        _mod.EXPECTED_E1_ENVIRONMENT = _saved_env
+    print("  [ok] environment gate: silent in the pinned env, raises on a mismatch")
+
+    # LF (not CRLF) result bytes, so a POSIX `git diff --check` stays quiet
+    assert b"\r\n" not in _result_bytes({"k": 1}), "_result_bytes still emits CRLF"
+    print("  [ok] result writer emits LF line endings")
+
     # strict JSON rejects NaN / Infinity, both on write and on read
     for bad_val in (float("nan"), float("inf"), float("-inf")):
         try:
@@ -1058,9 +1382,19 @@ def _build_parser() -> argparse.ArgumentParser:
                          "random_projection_ridge prediction matrix under "
                          "data/processed/predictions/ (gitignored) and re-score "
                          "them from disk.")
+    ap.add_argument("--validate-artifact", action="store_true",
+                    help="Portable structural / provenance validation of the "
+                         "committed result: strict JSON, schema, pinned result + "
+                         "component hashes, input + protected-artifact hashes, "
+                         "recorded environment, counts, split labels, alpha grid "
+                         "/ sweep, interior alpha, metrics, references, deltas, "
+                         "no-test-evaluation, softened interpretation. Does NOT "
+                         "recompute the projection -- runs on any environment.")
     ap.add_argument("--validate", action="store_true",
-                    help="Re-run, byte-compare to the committed result, and "
-                         "fail closed on any integrity problem.")
+                    help="Full numerical regeneration: re-run the projection + "
+                         "ridge, byte-compare to the committed result, fail "
+                         "closed on any integrity problem. Requires the pinned "
+                         "EXPECTED_E1_ENVIRONMENT (see requirements-e1.txt).")
     ap.add_argument("--check-determinism", action="store_true",
                     help="Compute the real result twice into temp files; "
                          "require byte-identical JSON. Does not touch the "
@@ -1083,57 +1417,77 @@ def main(argv: list[str] | None = None) -> int:
     did_something = False
     rc = 0
 
-    if args.run:
+    # ---- portable: no recompute, no environment gate ----------------------
+    if args.validate_artifact:
         did_something = True
         print("=" * 74)
-        print("E1  RANDOM-PROJECTION CONTROL  (val split, exploratory)")
+        print("VALIDATE-ARTIFACT  (portable: structure + provenance, no recompute)")
         print("=" * 74)
-        payload, artifacts = run(config.PROCESSED_DIR)
-        _write_result(payload, result_file)
-        print(f"\n  Written to: {result_file}")
-
-        if args.save_predictions:
-            print(f"\n{'=' * 74}")
-            print("SAVING HELD-OUT PREDICTIONS (gitignored)")
-            print("=" * 74)
-            if not save_predictions(artifacts):
-                rc = rc or 1
-
-        if payload["selected_alpha_at_grid_boundary"]:
-            print("\n" + "!" * 74)
-            print("  BOUNDARY ALPHA: the inner CV selected the grid "
-                  f"{'minimum' if payload['selected_alpha_is_grid_min'] else 'maximum'} "
-                  f"({payload['selected_alpha']:g}).")
-            print("  Full alpha sweep:")
-            for k_alpha, v_alpha in payload["alpha_sweep"].items():
-                print(f"    alpha={k_alpha:>12}  mean inner-CV spearman = {v_alpha}")
-            print("  Per CLAUDE.md section 9.3 / invariant 7: NOT widening the "
-                  "grid, NOT changing the seed, NOT committing this as a final")
-            print("  E1 result. The grid decision is a separate, approved step.")
-            print("!" * 74)
-            rc = rc or 1
-        else:
-            print(f"\n  Selected alpha {payload['selected_alpha']:g} is interior. "
-                  f"E1 result is on record.")
-
-    if args.check_determinism:
-        did_something = True
-        print("\n" + "=" * 74)
-        print("DETERMINISM CHECK")
-        print("=" * 74)
-        det = check_determinism()
-        rc = rc or (0 if det["ok"] else 1)
-
-    if args.validate:
-        did_something = True
-        print("\n" + "=" * 74)
-        print("VALIDATE random_projection_results.json")
-        print("=" * 74)
-        rep = validate(config.PROCESSED_DIR, result_file)
+        rep = validate_artifact(config.PROCESSED_DIR, result_file)
         print()
         print(f"  {rep['n_pass']}/{rep['n_pass'] + rep['n_fail']} checks passed"
               + ("" if rep["n_fail"] == 0 else f"  ({rep['n_fail']} FAILED)"))
         rc = rc or (0 if rep["n_fail"] == 0 else 1)
+
+    # ---- everything below recomputes real data: gated on the pinned env ---
+    try:
+        if args.run:
+            did_something = True
+            print("=" * 74)
+            print("E1  RANDOM-PROJECTION CONTROL  (val split, exploratory)")
+            print("=" * 74)
+            payload, artifacts = run(config.PROCESSED_DIR)
+            _write_result(payload, result_file)
+            print(f"\n  Written to: {result_file}")
+
+            if args.save_predictions:
+                print(f"\n{'=' * 74}")
+                print("SAVING HELD-OUT PREDICTIONS (gitignored)")
+                print("=" * 74)
+                if not save_predictions(artifacts):
+                    rc = rc or 1
+
+            if payload["selected_alpha_at_grid_boundary"]:
+                print("\n" + "!" * 74)
+                print("  BOUNDARY ALPHA: the inner CV selected the grid "
+                      f"{'minimum' if payload['selected_alpha_is_grid_min'] else 'maximum'} "
+                      f"({payload['selected_alpha']:g}).")
+                print("  Full alpha sweep:")
+                for k_alpha, v_alpha in payload["alpha_sweep"].items():
+                    print(f"    alpha={k_alpha:>12}  mean inner-CV spearman = {v_alpha}")
+                print("  Per CLAUDE.md section 9.3 / invariant 7: NOT widening the "
+                      "grid, NOT changing the seed, NOT committing this as a final")
+                print("  E1 result. The grid decision is a separate, approved step.")
+                print("!" * 74)
+                rc = rc or 1
+            else:
+                print(f"\n  Selected alpha {payload['selected_alpha']:g} is interior. "
+                      f"E1 result is on record.")
+
+        if args.check_determinism:
+            did_something = True
+            print("\n" + "=" * 74)
+            print("DETERMINISM CHECK")
+            print("=" * 74)
+            det = check_determinism()
+            rc = rc or (0 if det["ok"] else 1)
+
+        if args.validate:
+            did_something = True
+            print("\n" + "=" * 74)
+            print("VALIDATE random_projection_results.json  (full numerical regen)")
+            print("=" * 74)
+            rep = validate(config.PROCESSED_DIR, result_file)
+            print()
+            print(f"  {rep['n_pass']}/{rep['n_pass'] + rep['n_fail']} checks passed"
+                  + ("" if rep["n_fail"] == 0 else f"  ({rep['n_fail']} FAILED)"))
+            rc = rc or (0 if rep["n_fail"] == 0 else 1)
+
+    except E1EnvironmentError as exc:
+        print("\n" + "!" * 74)
+        print(str(exc))
+        print("!" * 74)
+        return 1
 
     if not did_something:
         ap.print_help()

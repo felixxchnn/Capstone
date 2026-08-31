@@ -145,7 +145,7 @@ independently of the code that built the file.
 | `baseline.py` | Global mean → lineage mean → ridge on PCA of expression. |
 | `train_head.py` | Ridge / MLP heads on frozen Geneformer embeddings. |
 | `analysis.py` | Bootstrap CI, paired per-target comparison, effective degrees of freedom. |
-| `random_projection.py` | E1 control (CLAUDE.md §9.3, exploratory, val-only). Seeded `GaussianRandomProjection(768)` of train-standardised expression through the same ridge head; writes `data/processed/random_projection_results.json`. `--run` / `--validate` (18 checks) / `--self-test` / `--check-determinism`; no `--split test` path. |
+| `random_projection.py` | E1 control (CLAUDE.md §9.3, exploratory, val-only). Seeded `GaussianRandomProjection(768)` of train-standardised expression through the same ridge head; writes `data/processed/random_projection_results.json` (LF). `--validate-artifact` (24 portable structural/provenance checks, no recompute) / `--run` / `--validate` (18 checks, full numerical regen) / `--self-test` / `--check-determinism`; no `--split test` path. Exact numerical regeneration needs the pinned stack in `requirements-e1.txt` on Python 3.14.6 — seeded projection components are not byte-stable across NumPy/scikit-learn versions. |
 | `make_fixture.py` | Synthetic data mirroring the real formats. |
 | `sample_profile.py` | Phase 2. Loads an external RNA-seq GCT (currently `BG003082`) into the frozen canonical gene space via Ensembl-ID join, with full reconciliation provenance. |
 | `geneformer_sample_input.py` | Phase 2. Builds validated Geneformer-input frames for `BG003082` from the committed GCT + `ensembl_map.csv` (no GPU/network); the Kaggle GPU half produced the committed `geneformer_bg003082_embedding.csv` sidecar. |
@@ -265,20 +265,35 @@ matches — very slightly exceeds — the frozen Geneformer embedding under a ma
 head, and both still lose to PCA-200. The +0.0057 margin over the head is one seed, not
 bootstrapped, and is within the ballpark of the paired bootstrap SE (0.0028) for the
 baseline-vs-head delta, so it is best read as "no worse than the pretrained embedding," not
-"beats it." What it does rule out is the reading that the embedding's deficit versus PCA is
-explained by the 768-dim bottleneck itself: a *random* bottleneck of the same width does not
-pay that price. This is an **exploratory validation control, not a final result** — a sixth
-model scored on the same 170 val lines, with the val-set-optimism caveat that carries
-(`CLAUDE.md` §11), and **no test-split evaluation was performed**. `random_projection.py`
-has no `--split test` path; `--validate` (18 fail-closed checks) and `--check-determinism`
-gate it.
+"beats it." This result makes bottleneck width alone an unlikely explanation for
+Geneformer's deficit and is consistent with the learned representation discarding or
+distorting useful expression signal. Because E1 uses one projection seed and the +0.0057
+difference was not given its own paired uncertainty analysis, it does not establish a causal
+mechanism or prove that random projection is superior. This is an **exploratory validation
+control, not a final result** — a sixth model scored on the same 170 val lines, with the
+val-set-optimism caveat that carries (`CLAUDE.md` §11), and **no test-split evaluation was
+performed**. `random_projection.py` has no `--split test` path.
+
+**Reproducing E1.** A fixed seed is *not* enough for byte-exact reproduction: seeded
+`GaussianRandomProjection` components differ across NumPy/scikit-learn versions (an
+independent checkout on numpy 2.3.5 / scikit-learn 1.8.0 got a different component hash and
+16/18). Exact numerical regeneration (`--run` / `--validate` / `--check-determinism`)
+requires the pinned stack in `requirements-e1.txt` on Python 3.14.6, and the module refuses
+to recompute outside it. `--validate-artifact` is the portable check: it verifies the
+committed artifact's structure, provenance, and pinned fingerprints (24 checks) on any
+environment without recomputing the projection.
 
 ### The test set
 
-`splits.json` marks it; nothing reads it except `baseline.py --split test`.
-Use `val` for every decision — features, hyperparameters, whether the
-transformer won. Touch `test` once, at the end, and report what it says. Every
-extra look quietly converts it into a validation set.
+`splits.json` records the assignment. **Split-assignment labels may be read** for integrity
+and role assertions — `checks.py` reads them, `baseline.py` / `train_head.py` / `analysis.py`
+select `train` and `val` rows by them, and E1 (`random_projection.py`) reads them to pick its
+800 train / 170 val rows. What has **not** happened, and happens only once after the model
+set is frozen in writing: no test-split expression features have been loaded for inference,
+no test-split CRISPR outcomes for evaluation, and no test-split predictions, rankings,
+metrics, or performance results have been computed or reported. Use `val` for every decision
+— features, hyperparameters, whether the transformer won. Every extra look at `test`
+quietly converts it into a validation set.
 
 The ridge penalty is never tuned on the split being reported: on `val` it's
 selected by grouped 5-fold CV inside the training set; on `test` it uses `val`.

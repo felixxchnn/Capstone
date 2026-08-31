@@ -70,7 +70,7 @@
     ],
     "components_dtype": "float64",
     "components_sha256": "d751f201d221c1b87048f9ef83fd93d91c810a98cbaabe2c9f14dd1c03828c38",
-    "components_sha256_byte_convention": "hashlib.sha256 over numpy.ascontiguousarray(components_, dtype=float64).tobytes(order='C') -- raw little-endian IEEE-754 doubles of the 768x18460 row-major matrix; no .npy header",
+    "components_sha256_byte_convention": "hashlib.sha256 over numpy.ascontiguousarray(components_, dtype='<f8').tobytes(order='C') -- little-endian IEEE-754 float64, C-order, no .npy header; 768x18460 row-major matrix",
     "distribution": "sklearn draws entries i.i.d. from N(0, 1/n_components) = N(0, 1/768)"
   },
   "projected_feature_variance_train": {
@@ -168,6 +168,7 @@
     "random_projection_minus_ridge_head": 0.0057,
     "random_projection_minus_lineage_mean": 0.0604
   },
+  "interpretation": "This result makes bottleneck width alone an unlikely explanation for Geneformer's deficit and is consistent with the learned representation discarding or distorting useful expression signal. Because E1 uses one projection seed and the +0.0057 difference was not given its own paired uncertainty analysis, it does not establish a causal mechanism or prove that random projection is superior.",
   "environment": {
     "python": "3.14.6",
     "numpy": "2.5.0",
@@ -182,6 +183,7 @@
     "Exploratory validation control, not a final result. It adds a sixth model scored on the same 170 val lines (val-set optimism, CLAUDE.md section 11).",
     "No test-split evaluation was performed. The one-time test-split run happens only after the model set is frozen in writing.",
     "Reproducibility is asymmetric: the baseline arm and this control reproduce end to end from the public repo; the Geneformer arm's embeddings do not (Kaggle GPU artifact).",
+    "Byte-exact regeneration of the projection needs the pinned stack in requirements-e1.txt on Python 3.14.6: a fixed seed alone does not make sklearn's GaussianRandomProjection components identical across NumPy / scikit-learn versions. Portable structural / provenance verification is `random_projection.py --validate-artifact`.",
     "The projected-feature spectrum (variance ~24 per column) is a third spectrum, between the head's unit-variance embeddings and the baseline's PCA eigenvalues; alpha is selected on its own 13-point grid and is required to be interior (CLAUDE.md invariant 7)."
   ]
 }

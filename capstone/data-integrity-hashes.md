@@ -444,10 +444,28 @@ Phase 1 §9.3 exploratory control. SHA-256 computed directly from the committed 
 (`hashlib.sha256`).
 
 ```
-915c4234ee6e54783d89a149fb8420d0d7fed3e00cf707855d24563cfe5ea6f7       9,436  data/processed/random_projection_results.json
+4adfb78b24f613adf826e7202272bbe5d95fcb9001d2f46d80567f1af319d186       9,993  data/processed/random_projection_results.json
 ```
 
-**`random_projection_results.json`** — schema `random-projection-control/1`, CRLF, trailing
+**Reproducibility repair (after `e57a17d`).** The first commit stored this artifact with
+**CRLF** under `data/processed/** -text`, so a POSIX commit-range `git diff --check` flagged
+every added line as trailing-CR whitespace; and it treated a fixed integer seed as
+sufficient for cross-environment regeneration, which it is not. Fixed, numbers unchanged:
+the E1 writer now emits explicit **LF** bytes (`_result_text(...).encode("utf-8")`); the
+component hash forces little-endian float64 (`dtype="<f8"`); `random_projection.py` gates
+`--run` / full `--validate` / `--check-determinism` on `EXPECTED_E1_ENVIRONMENT` (Python
+3.14.6 + `requirements-e1.txt`: numpy 2.5.0, pandas 3.0.3, scipy 1.18.0, scikit-learn 1.9.0)
+and fails closed with a pointer to that file if the runtime stack differs; a portable
+`--validate-artifact` (24 checks, no recompute) was added; and a softened `interpretation`
+string was added to the artifact. **The E1 numbers did not change** — Spearman 0.2104,
+selected alpha 3162.0, projection-component hash `d751f201…`, deltas −0.0252 / +0.0057 /
++0.0604 all identical; only line endings, the new `interpretation` key, and the byte-convention
+wording differ, so the artifact SHA-256 moved `915c4234…` (9,436 B, CRLF) → `4adfb78b…`
+(9,993 B, LF). Discovered by an independent checkout on Python 3.12.13 / numpy 2.3.5 /
+pandas 2.2.3 / scipy 1.17.0 / scikit-learn 1.8.0, which produced component hash `4eda5c12…`
+and 16/18 on `--validate`.
+
+**`random_projection_results.json`** — schema `random-projection-control/1`, **LF**, trailing
 newline, strict JSON (`allow_nan=False` on write; no `NaN` / `Infinity`). One deterministic
 artifact recording the E1 result.
 
@@ -465,17 +483,26 @@ artifact recording the E1 result.
   0 patient groups crossing the train/val boundary.
 - **Projection:** `GaussianRandomProjection`, `components_` shape `768 × 18460`, `float64`,
   SHA-256 `d751f201d221c1b87048f9ef83fd93d91c810a98cbaabe2c9f14dd1c03828c38` over
-  `numpy.ascontiguousarray(components_, dtype=float64).tobytes(order="C")` (raw
-  little-endian doubles, row-major, no `.npy` header). Projected-column training variance
-  mean 24.208668 vs theoretical 18460/768 ≈ 24.036458 (ratio 1.007165).
+  `numpy.ascontiguousarray(components_, dtype="<f8").tobytes(order="C")` — **little-endian
+  IEEE-754 float64, C-order, no `.npy` header**; 768×18460 row-major. Projected-column
+  training variance mean 24.208668 vs theoretical 18460/768 ≈ 24.036458 (ratio 1.007165).
 - **Selected alpha:** 3162.0 — **interior** (grid min 1.0, grid max 1e6; unimodal inner-CV
   sweep). `selected_alpha_at_grid_boundary = false`.
 - **Result:** mean per-target Spearman **0.2104**. Deltas: −0.0252 vs `ridge_pca` (0.2356),
   +0.0057 vs `ridge_head` (0.2047), +0.0604 vs `lineage_mean` (0.1500). Reference values are
   read from `baseline_results.json` / `head_results.json` at run time and asserted equal to
   those literals.
-- **Environment** (recorded in the artifact; determinism is within it): Python 3.14.6,
-  numpy 2.5.0, scipy 1.18.0, scikit-learn 1.9.0, pandas 3.0.3.
+- **Interpretation (softened, stored in the artifact):** *"This result makes bottleneck
+  width alone an unlikely explanation for Geneformer's deficit and is consistent with the
+  learned representation discarding or distorting useful expression signal. Because E1 uses
+  one projection seed and the +0.0057 difference was not given its own paired uncertainty
+  analysis, it does not establish a causal mechanism or prove that random projection is
+  superior."* (The earlier "rules out the 768-dim bottleneck" wording was too strong for one
+  seed and an unbootstrapped comparison.)
+- **Environment** (recorded in the artifact, and required for byte-exact regeneration —
+  `random_projection.EXPECTED_E1_ENVIRONMENT`; the module fails closed otherwise and points
+  to `requirements-e1.txt`): Python 3.14.6, numpy 2.5.0, pandas 3.0.3, scipy 1.18.0,
+  scikit-learn 1.9.0.
 
 **Inputs consumed** (gated against these SHA-256 in `random_projection.EXPECTED_INPUT_SHA256`;
 the build hard-fails if any moved): `expression.npz` `3d5bfa0c…`, `expression.labels.json`
@@ -485,12 +512,19 @@ the build hard-fails if any moved): `expression.npz` `3d5bfa0c…`, `expression.
 `head_results.json` `1962206f…`. (`geneformer_embeddings.csv` is **not** consumed — E1 uses
 expression only.)
 
-**Deterministic.** `py random_projection.py --run` writes byte-identical output on repeat
-within the recorded environment; `--check-determinism` recomputes twice and byte-compares;
-`--validate` (18 fail-closed checks) recomputes the whole result, byte-compares to the
-committed file, re-checks counts / projection hash / interior alpha / finite metrics /
-reference values / deltas / no-test-evaluation, and confirms the protected artifacts below
-are unchanged. `--self-test` covers the synthetic path offline.
+**Deterministic — within `EXPECTED_E1_ENVIRONMENT`.** `py random_projection.py --run` writes
+byte-identical output on repeat in the pinned env; `--check-determinism` recomputes twice and
+byte-compares; full `--validate` (18 fail-closed checks) recomputes the whole result,
+byte-compares to the committed file, re-checks counts / projection hash / interior alpha /
+finite metrics / reference values / deltas / no-test-evaluation, and confirms the protected
+artifacts below are unchanged. All three refuse to run outside the pinned stack (a fixed seed
+does not make `GaussianRandomProjection` byte-stable across NumPy / scikit-learn versions).
+**`py random_projection.py --validate-artifact`** is the portable alternative — 24
+structural / provenance checks (strict JSON, schema, pinned artifact SHA-256 + size + LF,
+pinned component hash, input + protected hashes, recorded env == `EXPECTED_E1_ENVIRONMENT`,
+counts + `splits.json` labels, 13-point alpha grid + sweep, interior alpha 3162, metrics,
+references, deltas, no-test-evaluation, softened interpretation) with **no recompute**, so it
+runs on any environment. `--self-test` covers the synthetic path offline and is portable.
 
 **All Phase 1 and Phase 2 protected hashes are unchanged by this addition.**
 `baseline_results.json` `b49169bd…`, `head_results.json` `1962206f…`, `analysis_results.json`
@@ -498,7 +532,9 @@ are unchanged. `--self-test` covers the synthetic path offline.
 `a962c01a5b65a6ef579ea57dced67048bf9016ba0f66aab2355cf1f054796e8c`, `phase2_report.html`
 `f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163`, and the
 `reconstructed_fitted/` subtree all verify identical. `random_projection.py` reads these
-files and never writes them; its only new tracked output is
-`data/processed/random_projection_results.json`. The optional
-`--save-predictions` bundle lands under the git-ignored `data/processed/predictions/` and is
-never committed. `py checks.py` stays **55/55** — E1 carries its own validation.
+files and never writes them; its only tracked outputs are
+`data/processed/random_projection_results.json` and the E1-only environment spec
+`requirements-e1.txt` (repo root; not the project's general install — see its header). The
+optional `--save-predictions` bundle lands under the git-ignored
+`data/processed/predictions/` and is never committed. `py checks.py` stays **55/55** — E1
+carries its own validation.
