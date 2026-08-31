@@ -41,8 +41,9 @@ and a descriptive five-line osteosarcoma aggregate. `report.py` renders that JSO
 self-contained **`phase2_report.html`** — no inference, no network, no CDN; **open it in any
 browser (double-click, or a `file://` URL)**. The project makes **no clinical or efficacy
 claim**. This is the Phase 2 application layer only; the overall capstone still has separate
-work outstanding — the E1 random-projection control, the written model-set freeze, the
-one-time final test-split evaluation, and presentation preparation. See "Phase 2" below and
+work outstanding — the written model-set freeze, the one-time final test-split evaluation,
+and presentation preparation. (The pre-planned E1 random-projection control is now done and
+committed — see "E1" under "Reading the results".) See "Phase 2" below and
 `capstone/scope-decisions.md` for the full approved scope.
 
 ## Data and licences
@@ -144,6 +145,7 @@ independently of the code that built the file.
 | `baseline.py` | Global mean → lineage mean → ridge on PCA of expression. |
 | `train_head.py` | Ridge / MLP heads on frozen Geneformer embeddings. |
 | `analysis.py` | Bootstrap CI, paired per-target comparison, effective degrees of freedom. |
+| `random_projection.py` | E1 control (CLAUDE.md §9.3, exploratory, val-only). Seeded `GaussianRandomProjection(768)` of train-standardised expression through the same ridge head; writes `data/processed/random_projection_results.json`. `--run` / `--validate` (18 checks) / `--self-test` / `--check-determinism`; no `--split test` path. |
 | `make_fixture.py` | Synthetic data mirroring the real formats. |
 | `sample_profile.py` | Phase 2. Loads an external RNA-seq GCT (currently `BG003082`) into the frozen canonical gene space via Ensembl-ID join, with full reconciliation provenance. |
 | `geneformer_sample_input.py` | Phase 2. Builds validated Geneformer-input frames for `BG003082` from the committed GCT + `ensembl_map.csv` (no GPU/network); the Kaggle GPU half produced the committed `geneformer_bg003082_embedding.csv` sidecar. |
@@ -177,11 +179,12 @@ Written to `data/processed/`:
 - `baseline_results.json` — expression-baseline metrics (`baseline.py`)
 - `head_results.json` — Geneformer-head metrics (`train_head.py`)
 - `analysis_results.json` — bootstrap CI, paired comparison, effective df (`analysis.py`)
+- `random_projection_results.json` — E1 exploratory control: seeded random-projection ridge on val (`random_projection.py`, schema `random-projection-control/1`). Spearman 0.2104; Δ −0.0252 vs PCA-ridge, +0.0057 vs Geneformer head, +0.0604 vs lineage mean. Not a test result.
 - `ensembl_map.csv` — Phase 2. Entrez↔Ensembl cross-reference (NCBI `gene2ensembl`), 18,459/18,460 canonical genes (`NOX5` has no NCBI Ensembl xref). Consumed by `prepare_geneformer_input.py` and `sample_profile.py`.
 - `geneformer_bg003082_embedding.csv` / `.provenance.json` — Phase 2. The 1 × 768 Geneformer CLS embedding for the external `BG003082` tumor sample, from the Kaggle GPU run (`kaggle_bg003082_embedding.py`). A separate exploratory sidecar; the frozen `geneformer_embeddings.csv` is unchanged.
 - `case_study.json` — Phase 2. The deterministic case-study artifact written by `case_study.py` (schema `case-study/1`). Committed; SHA-256 `a962c01a…`, byte-identical on any OS. Plus the `reconstructed_fitted/` subtree (reconstructed fitted state for the two frozen linear models).
 
-19 files are tracked directly in `data/processed/` (plus the `reconstructed_fitted/` subtree). `join_report.txt` is methods-section material. "We intersected three DepMap
+20 files are tracked directly in `data/processed/` (plus the `reconstructed_fitted/` subtree). `join_report.txt` is methods-section material. "We intersected three DepMap
 tables, reconciled 18,463 genes across two matrices by Entrez ID, and retained
 4,297 selective dependencies" is real provenance, and it's already written for you.
 
@@ -240,6 +243,35 @@ comparison was fixed before any of them were run, and it is reported here regard
 it came out — a rigorous negative result is a stronger capstone than a vague positive one.
 Full bootstrap, Wilcoxon, and effective-degrees-of-freedom analysis: `analysis.py` and
 `data/processed/analysis_results.json`.
+
+### E1 — random-projection control (exploratory)
+
+Does Geneformer pretraining buy anything over a *fixed random linear compression of
+expression at the same width*? `random_projection.py` runs the identical ridge head on a
+seeded `GaussianRandomProjection(n_components=768, random_state=20260722)` of
+train-standardised expression — same imputation, same 13-point alpha grid, same
+patient-grouped inner-CV alpha selection, same per-target Spearman on the same 170 val
+lines. Selected alpha **3162** (interior — identical to the Geneformer head; grid-min 1.0
+scores 0.0638, grid-max 1e6 scores 0.1767, unimodal peak at 3162). Projected-column
+variance averages 24.21, matching the 18,460/768 ≈ 24.04 theoretical scale.
+
+Result (`data/processed/random_projection_results.json`, schema `random-projection-control/1`):
+mean per-target Spearman **0.2104** on val. Deltas: **−0.0252 vs ridge-on-PCA-expression**
+(0.2356), **+0.0057 vs the Geneformer ridge head** (0.2047), **+0.0604 vs the lineage-mean
+control** (0.1500).
+
+**Cautious interpretation.** A single fixed random 768-dim linear sketch of expression
+matches — very slightly exceeds — the frozen Geneformer embedding under a matched linear
+head, and both still lose to PCA-200. The +0.0057 margin over the head is one seed, not
+bootstrapped, and is within the ballpark of the paired bootstrap SE (0.0028) for the
+baseline-vs-head delta, so it is best read as "no worse than the pretrained embedding," not
+"beats it." What it does rule out is the reading that the embedding's deficit versus PCA is
+explained by the 768-dim bottleneck itself: a *random* bottleneck of the same width does not
+pay that price. This is an **exploratory validation control, not a final result** — a sixth
+model scored on the same 170 val lines, with the val-set-optimism caveat that carries
+(`CLAUDE.md` §11), and **no test-split evaluation was performed**. `random_projection.py`
+has no `--split test` path; `--validate` (18 fail-closed checks) and `--check-determinism`
+gate it.
 
 ### The test set
 

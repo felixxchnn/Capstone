@@ -437,3 +437,68 @@ and the report is complete and readable with no internet access.
 
 **Offline viewing.** Open `phase2_report.html` directly in any modern browser
 (double-click, or `file://` URL). No server, no build step, no network.
+
+### Added with the E1 random-projection control (`random_projection.py`)
+
+Phase 1 §9.3 exploratory control. SHA-256 computed directly from the committed bytes
+(`hashlib.sha256`).
+
+```
+915c4234ee6e54783d89a149fb8420d0d7fed3e00cf707855d24563cfe5ea6f7       9,436  data/processed/random_projection_results.json
+```
+
+**`random_projection_results.json`** — schema `random-projection-control/1`, CRLF, trailing
+newline, strict JSON (`allow_nan=False` on write; no `NaN` / `Infinity`). One deterministic
+artifact recording the E1 result.
+
+- **Pipeline:** `baseline.impute_with_train_mean` (train-mean expression) → `StandardScaler`
+  [fit on train] → `GaussianRandomProjection(n_components=768,
+  random_state=config.RANDOM_SEED = 20260722)` [fit on standardized train] →
+  `train_head.run_ridge_head` (its own `StandardScaler` + multi-output `Ridge`, alpha by
+  patient-grouped inner 5-fold CV on the 800 training lines over
+  `train_head.HEAD_RIDGE_ALPHAS`) → `baseline.evaluate` (per-target Spearman) on the 170
+  val cell lines.
+- **Split:** `val` only. **No test-split feature, outcome, prediction, metric, or
+  performance number was produced** — `random_projection.py` has no `--split test` path.
+- **Counts (hard-asserted):** 800 train / 170 val / 0 test rows used; 4,297 targets; 18,460
+  expression features before projection; 768 projected features; train/val indices disjoint;
+  0 patient groups crossing the train/val boundary.
+- **Projection:** `GaussianRandomProjection`, `components_` shape `768 × 18460`, `float64`,
+  SHA-256 `d751f201d221c1b87048f9ef83fd93d91c810a98cbaabe2c9f14dd1c03828c38` over
+  `numpy.ascontiguousarray(components_, dtype=float64).tobytes(order="C")` (raw
+  little-endian doubles, row-major, no `.npy` header). Projected-column training variance
+  mean 24.208668 vs theoretical 18460/768 ≈ 24.036458 (ratio 1.007165).
+- **Selected alpha:** 3162.0 — **interior** (grid min 1.0, grid max 1e6; unimodal inner-CV
+  sweep). `selected_alpha_at_grid_boundary = false`.
+- **Result:** mean per-target Spearman **0.2104**. Deltas: −0.0252 vs `ridge_pca` (0.2356),
+  +0.0057 vs `ridge_head` (0.2047), +0.0604 vs `lineage_mean` (0.1500). Reference values are
+  read from `baseline_results.json` / `head_results.json` at run time and asserted equal to
+  those literals.
+- **Environment** (recorded in the artifact; determinism is within it): Python 3.14.6,
+  numpy 2.5.0, scipy 1.18.0, scikit-learn 1.9.0, pandas 3.0.3.
+
+**Inputs consumed** (gated against these SHA-256 in `random_projection.EXPECTED_INPUT_SHA256`;
+the build hard-fails if any moved): `expression.npz` `3d5bfa0c…`, `expression.labels.json`
+`d18005cc…`, `crispr_effect.npz` `9214efa3…`, `crispr_effect.labels.json` `165906f0…`,
+`selective_genes.json` `68c8fe39…`, `splits.json` `f1419abc…`, `model_metadata.csv`
+`1c314197…`, `gene_columns.json` `a4b80690…`, `baseline_results.json` `b49169bd…`,
+`head_results.json` `1962206f…`. (`geneformer_embeddings.csv` is **not** consumed — E1 uses
+expression only.)
+
+**Deterministic.** `py random_projection.py --run` writes byte-identical output on repeat
+within the recorded environment; `--check-determinism` recomputes twice and byte-compares;
+`--validate` (18 fail-closed checks) recomputes the whole result, byte-compares to the
+committed file, re-checks counts / projection hash / interior alpha / finite metrics /
+reference values / deltas / no-test-evaluation, and confirms the protected artifacts below
+are unchanged. `--self-test` covers the synthetic path offline.
+
+**All Phase 1 and Phase 2 protected hashes are unchanged by this addition.**
+`baseline_results.json` `b49169bd…`, `head_results.json` `1962206f…`, `analysis_results.json`
+`12431dad…`, every Phase 1 matrix, `case_study.json`
+`a962c01a5b65a6ef579ea57dced67048bf9016ba0f66aab2355cf1f054796e8c`, `phase2_report.html`
+`f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163`, and the
+`reconstructed_fitted/` subtree all verify identical. `random_projection.py` reads these
+files and never writes them; its only new tracked output is
+`data/processed/random_projection_results.json`. The optional
+`--save-predictions` bundle lands under the git-ignored `data/processed/predictions/` and is
+never committed. `py checks.py` stays **55/55** — E1 carries its own validation.

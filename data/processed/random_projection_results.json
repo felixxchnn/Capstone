@@ -1,0 +1,187 @@
+{
+  "schema": "random-projection-control/1",
+  "experiment": "E1",
+  "title": "Random-projection control: a fixed 768-dim Gaussian random compression of expression through the Geneformer ridge head",
+  "scientific_question": "Does Geneformer pretraining provide more useful predictive information than a fixed random linear compression of expression at the same 768-dimensional width?",
+  "status": {
+    "kind": "exploratory validation control",
+    "split_evaluated": "val",
+    "test_split_touched": false,
+    "test_evaluation_performed": false,
+    "preplanned": "CLAUDE.md section 9.3; covered by the 2026-08-25 Phase 2 scope decision as already-open work -- not a new material scope change",
+    "val_set_optimism": "This is a sixth model scored on the same 170 val cell lines. Selecting among several models on 170 lines inflates reported numbers (CLAUDE.md section 11). The pre-specified headline comparison (ridge_pca vs ridge_head) was fixed before E1 existed; E1 is exploratory and is reported regardless of outcome."
+  },
+  "seed": 20260722,
+  "pipeline": "impute(train-mean expression) -> StandardScaler[fit on train] -> GaussianRandomProjection(n_components=768, random_state=config.RANDOM_SEED)[fit on standardized train] -> StandardScaler[fit on train, inside train_head.run_ridge_head] -> multi-output Ridge (alpha by patient-grouped inner 5-fold CV on the 800 training lines) -> per-target Spearman across the 170 val cell lines",
+  "reused_components": [
+    "baseline.impute_with_train_mean",
+    "baseline.evaluate / baseline.per_target_spearman",
+    "baseline._select_alpha_inner_cv (via train_head.run_ridge_head)",
+    "train_head.run_ridge_head",
+    "train_head.HEAD_RIDGE_ALPHAS",
+    "baseline.save_prediction_bundle / baseline.verify_prediction_bundle (only with --save-predictions)"
+  ],
+  "input_artifact_sha256": {
+    "data/processed/expression.npz": "3d5bfa0c3430584f8943fd2365be0eecf8b994b38bfc7d491d59d7b9ff251a2d",
+    "data/processed/expression.labels.json": "d18005cc0aec3e4d5f0fd06c748ef66672256cd8c7a6f24ea4c441b0ca785983",
+    "data/processed/crispr_effect.npz": "9214efa3ce172079e6ce4ca78853d8bf92fb8f6d4a55d0c6c71e4653b59e8826",
+    "data/processed/crispr_effect.labels.json": "165906f07e61819c8fadb2bf3c95a73817e538a22a34f63c415a30222ac49b9f",
+    "data/processed/selective_genes.json": "68c8fe39ae8965ce20b04f50870609cc21734386ceeff859f4d0bddd2e5bab35",
+    "data/processed/splits.json": "f1419abc7cbd31efc173a5857bab9eb318b53f8e535a17048bfcf0ea2f70aeef",
+    "data/processed/model_metadata.csv": "1c314197b57c1f8363eb44f8902b3733777e7c304d7f677c76d401e3cabe5180",
+    "data/processed/gene_columns.json": "a4b8069cc93af48f01e745bb1a15f4eaf4a7b67c9f92ca44bef3bb9e44c6d0a1",
+    "data/processed/baseline_results.json": "b49169bd363a596f400b4faff8c21d354275b70404efe08b9109d38f1bdc0ffd",
+    "data/processed/head_results.json": "1962206fa17646cbd1fec4b642a577cc2586c09c4cabd980541a7e11a8b6f894"
+  },
+  "counts": {
+    "n_train_lines": 800,
+    "n_val_lines": 170,
+    "n_test_lines_used": 0,
+    "n_targets": 4297,
+    "n_expression_features_before_projection": 18460,
+    "n_projected_features": 768,
+    "train_val_indices_disjoint": true,
+    "patient_groups_crossing_train_val_boundary": 0
+  },
+  "leakage_guards": {
+    "imputation_fit_on": "train rows only (baseline.impute_with_train_mean)",
+    "standardscaler_expression_fit_on": "train rows only",
+    "random_projection_fit_on": "standardized train rows only; GaussianRandomProjection draws its matrix from the seed and n_features -- no data values enter the component matrix",
+    "alpha_selection": "patient-grouped 5-fold CV inside the 800 training lines (X_val=None); no val row is scored during selection",
+    "ridge_fit_on": "train rows only",
+    "feature_order_matches": "gene_columns.json canonical_columns (18460, in order)",
+    "target_order_matches": "selective_genes.json 'genes' filtered to crispr_effect columns (4297, in order)",
+    "no_validation_statistic_enters": "preprocessing, projection construction, imputation, alpha selection, or model fitting"
+  },
+  "projection": {
+    "class": "sklearn.random_projection.GaussianRandomProjection",
+    "params": {
+      "compute_inverse_components": false,
+      "eps": 0.1,
+      "n_components": 768,
+      "random_state": 20260722
+    },
+    "random_state": 20260722,
+    "n_features_in": 18460,
+    "n_components_out": 768,
+    "components_shape": [
+      768,
+      18460
+    ],
+    "components_dtype": "float64",
+    "components_sha256": "d751f201d221c1b87048f9ef83fd93d91c810a98cbaabe2c9f14dd1c03828c38",
+    "components_sha256_byte_convention": "hashlib.sha256 over numpy.ascontiguousarray(components_, dtype=float64).tobytes(order='C') -- raw little-endian IEEE-754 doubles of the 768x18460 row-major matrix; no .npy header",
+    "distribution": "sklearn draws entries i.i.d. from N(0, 1/n_components) = N(0, 1/768)"
+  },
+  "projected_feature_variance_train": {
+    "note": "column variance of the 768 projected TRAINING features, before the ridge-head StandardScaler",
+    "ddof": 1,
+    "mean": 24.208668,
+    "median": 23.183993,
+    "min": 15.158028,
+    "max": 44.430885,
+    "q25": 20.844531,
+    "q75": 26.856305,
+    "theoretical_approx": 24.036458,
+    "theoretical_formula": "n_expression_features / n_components = 18460 / 768",
+    "observed_mean_over_theoretical": 1.007165,
+    "consistency_band": [
+      0.5,
+      2.0
+    ],
+    "consistent_with_theoretical_scale": true
+  },
+  "alpha_grid": [
+    1.0,
+    3.16,
+    10.0,
+    31.6,
+    100.0,
+    316.0,
+    1000.0,
+    3162.0,
+    10000.0,
+    31623.0,
+    100000.0,
+    316228.0,
+    1000000.0
+  ],
+  "alpha_grid_source": "train_head.HEAD_RIDGE_ALPHAS (13 points, 1.0 .. 1e6)",
+  "alpha_grid_n_points": 13,
+  "alpha_selection_method": "grouped 5-fold CV inside the training set",
+  "alpha_sweep": {
+    "1.0": 0.0638,
+    "3.16": 0.0716,
+    "10.0": 0.0857,
+    "31.6": 0.1068,
+    "100.0": 0.1344,
+    "316.0": 0.1651,
+    "1000.0": 0.1922,
+    "3162.0": 0.2066,
+    "10000.0": 0.2045,
+    "31623.0": 0.1932,
+    "100000.0": 0.1835,
+    "316228.0": 0.1786,
+    "1000000.0": 0.1767
+  },
+  "selected_alpha": 3162.0,
+  "selected_alpha_is_grid_min": false,
+  "selected_alpha_is_grid_max": false,
+  "selected_alpha_at_grid_boundary": false,
+  "selected_alpha_interior": true,
+  "metrics": {
+    "eval_split": "val",
+    "spearman_mean": 0.2104,
+    "spearman_median": 0.2052,
+    "spearman_q25": 0.1167,
+    "spearman_q75": 0.2947,
+    "spearman_frac_positive": 0.9567,
+    "spearman_n_targets_scored": 4297,
+    "spearman_n_targets_undefined": 0,
+    "r2_mean": 0.0477,
+    "r2_median": 0.034,
+    "r2_q25": -0.0114,
+    "r2_q75": 0.0908,
+    "r2_frac_positive": 0.6856,
+    "r2_n_targets_scored": 4297,
+    "r2_n_targets_undefined": 0
+  },
+  "reference_values": {
+    "ridge_pca_spearman_mean": {
+      "value": 0.2356,
+      "source": "data/processed/baseline_results.json::tasks.crispr.models.ridge_pca.spearman_mean",
+      "matches_expected_literal": true
+    },
+    "ridge_head_spearman_mean": {
+      "value": 0.2047,
+      "source": "data/processed/head_results.json::tasks.crispr.models.ridge_head.spearman_mean",
+      "matches_expected_literal": true
+    },
+    "lineage_mean_spearman_mean": {
+      "value": 0.15,
+      "source": "data/processed/baseline_results.json::tasks.crispr.models.lineage_mean.spearman_mean",
+      "matches_expected_literal": true
+    }
+  },
+  "deltas": {
+    "random_projection_minus_ridge_pca": -0.0252,
+    "random_projection_minus_ridge_head": 0.0057,
+    "random_projection_minus_lineage_mean": 0.0604
+  },
+  "environment": {
+    "python": "3.14.6",
+    "numpy": "2.5.0",
+    "scipy": "1.18.0",
+    "scikit_learn": "1.9.0",
+    "pandas": "3.0.3"
+  },
+  "determinism": "Byte-identical on rebuild within the recorded environment: StandardScaler, GaussianRandomProjection (seeded), GroupKFold (no shuffle) and Ridge (cholesky) are all deterministic. Verified by --check-determinism; --validate re-runs and byte-compares to the committed file.",
+  "no_test_evaluation": "No test-split expression feature was loaded for inference, no test-split CRISPR outcome was loaded for evaluation, and no test prediction, ranking, metric, or performance number was computed or reported by this module. There is no --split test code path.",
+  "limitations": [
+    "This is ONE fixed random projection (seed 20260722). A different seed gives a different projection and could give a different score; the result is not averaged over projections.",
+    "Exploratory validation control, not a final result. It adds a sixth model scored on the same 170 val lines (val-set optimism, CLAUDE.md section 11).",
+    "No test-split evaluation was performed. The one-time test-split run happens only after the model set is frozen in writing.",
+    "Reproducibility is asymmetric: the baseline arm and this control reproduce end to end from the public repo; the Geneformer arm's embeddings do not (Kaggle GPU artifact).",
+    "The projected-feature spectrum (variance ~24 per column) is a third spectrum, between the head's unit-variance embeddings and the baseline's PCA eigenvalues; alpha is selected on its own 13-point grid and is required to be interior (CLAUDE.md invariant 7)."
+  ]
+}
