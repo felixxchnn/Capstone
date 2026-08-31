@@ -295,8 +295,9 @@ def _assert_e1_environment() -> None:
     --check-determinism). A fixed seed does NOT make GaussianRandomProjection
     byte-stable across NumPy / scikit-learn versions, so the committed component
     hash only reproduces under EXPECTED_E1_ENVIRONMENT. Fails BEFORE any
-    projection or ridge fit. Portable checks (--validate-artifact, --self-test)
-    never call this.
+    projection or ridge fit. --validate-artifact never calls this; the portable
+    --self-test exercises it only through a mocked ``_environment()``, so the
+    self-test does not depend on the real runtime versions.
     """
     observed = _environment()
     mismatch = [
@@ -1296,21 +1297,27 @@ def _self_test() -> int:
         pass
     print("  [ok] there is no --split test code path (argparse rejects it)")
 
-    # environment gate: silent in the pinned env, hard-fails on a version mismatch
-    _assert_e1_environment()                         # we ARE in EXPECTED_E1_ENVIRONMENT
+    # environment gate: portable -- mock the OBSERVED environment rather than
+    # relying on the real runtime versions (only the E1 pins on the pinned
+    # stack) or mutating the EXPECTED_E1_ENVIRONMENT constant. Both branches:
+    # an exact synthetic match must not raise; a synthetic mismatch must raise.
     _mod = sys.modules[__name__]
-    _saved_env = _mod.EXPECTED_E1_ENVIRONMENT
+    _saved_environment = _mod._environment
     try:
-        _mod.EXPECTED_E1_ENVIRONMENT = {**_saved_env, "numpy": "0.0.0-not-real"}
+        _mod._environment = lambda: dict(EXPECTED_E1_ENVIRONMENT)
+        _assert_e1_environment()                     # exact synthetic match -> no raise
+
+        _mod._environment = lambda: {**EXPECTED_E1_ENVIRONMENT, "numpy": "0.0.0-not-real"}
         raised = False
         try:
             _assert_e1_environment()
         except E1EnvironmentError:
             raised = True
-        assert raised, "_assert_e1_environment did not flag a version mismatch"
+        assert raised, "_assert_e1_environment did not flag a synthetic version mismatch"
     finally:
-        _mod.EXPECTED_E1_ENVIRONMENT = _saved_env
-    print("  [ok] environment gate: silent in the pinned env, raises on a mismatch")
+        _mod._environment = _saved_environment
+    print("  [ok] environment gate: accepts an exact synthetic match, "
+          "rejects a synthetic mismatch")
 
     # LF (not CRLF) result bytes, so a POSIX `git diff --check` stays quiet
     assert b"\r\n" not in _result_bytes({"k": 1}), "_result_bytes still emits CRLF"
