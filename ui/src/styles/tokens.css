@@ -1,0 +1,99 @@
+/* Design tokens — green / white / black computational-biology research dashboard.
+   Committed palette:
+     near-black  #07110B
+     emerald     #087A45
+     bio-green   #18A866
+     pale mint   #DDF7E8
+     off-white   #F7FBF8
+     white       #FFFFFF
+   Warning / caution colours are used only for accessibility + scientific cautions. */
+
+:root {
+  color-scheme: light;
+
+  /* base palette */
+  --c-near-black: #07110b;
+  --c-emerald: #087a45;
+  --c-bio-green: #18a866;
+  --c-mint: #ddf7e8;
+  --c-off-white: #f7fbf8;
+  --c-white: #ffffff;
+
+  /* semantic surfaces */
+  --bg: var(--c-off-white);
+  --surface: var(--c-white);
+  --surface-2: #eef6f0;
+  --surface-sunken: #e6f1ea;
+  --ink: #0c1a12;
+  --ink-soft: #33473b;
+  --ink-faint: #5c6f64;
+  --hairline: #cfe3d6;
+  --hairline-strong: #a9cdb7;
+
+  /* dark zones: nav + hero */
+  --dark-bg: var(--c-near-black);
+  --dark-bg-2: #0c1c13;
+  --dark-ink: #eaf6ee;
+  --dark-ink-soft: #a7c9b4;
+  --dark-hairline: #1e3a29;
+
+  /* interactive */
+  --accent: var(--c-emerald);
+  --accent-strong: #0a6b3d;
+  --accent-bright: var(--c-bio-green);
+  --accent-on: #ffffff;
+  --accent-tint: var(--c-mint);
+  --focus: #0f8a4e;
+  --focus-ring: 0 0 0 3px rgba(15, 138, 78, 0.45);
+
+  /* evidence status */
+  --status-cited: #0a6b3d;
+  --status-cited-bg: #e2f3e9;
+  --status-source: #7a5a00;
+  --status-source-bg: #fbf1d8;
+  --status-none: #5c6f64;
+  --status-none-bg: #eef1ef;
+
+  /* cautions (used sparingly) */
+  --warn-ink: #7a4b00;
+  --warn-bg: #fdf3e2;
+  --warn-line: #e0a44a;
+  --danger-ink: #8a1f1f;
+  --danger-bg: #fbecec;
+  --danger-line: #d98a8a;
+
+  /* typography */
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Consolas",
+    "Liberation Mono", Menlo, monospace;
+  --fs-900: clamp(2.1rem, 1.4rem + 2.6vw, 3rem);
+  --fs-800: clamp(1.6rem, 1.2rem + 1.4vw, 2.1rem);
+  --fs-700: 1.3rem;
+  --fs-600: 1.08rem;
+  --fs-400: 1rem;
+  --fs-300: 0.9rem;
+  --fs-200: 0.8rem;
+
+  /* space + shape */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(7, 17, 11, 0.06), 0 4px 14px rgba(7, 17, 11, 0.05);
+  --shadow-2: 0 8px 30px rgba(7, 17, 11, 0.12);
+  --maxw: 1200px;
+  --nav-h: 60px;
+}
+
+@media (forced-colors: active) {
+  :root {
+    --focus-ring: 0 0 0 3px CanvasText;
+  }
+}

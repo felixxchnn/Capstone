@@ -18,6 +18,23 @@ Thumbs.db
 .DS_Store
 data/processed/predictions/
 
+# ui/ React app — build output, dependencies, caches, coverage, local env
+ui/node_modules/
+ui/dist/
+ui/coverage/
+ui/.vite/
+ui/.smoke/
+ui/vite.config.ts.timestamp-*
+ui/*.local
+ui/.env
+ui/.env.*
+!ui/.env.example
+
+# temporary UI screenshots / scratch captures (never committed)
+**/ui-screenshot-*.png
+**/screenshot-tmp-*/
+**/.smoke/
+
 # evidence.py volatile per-run execution log (wall-clock times live ONLY here;
 # every committed evidence artifact is deterministic and carries no timestamp)
 data/external/dgidb/build_runlog.jsonl
