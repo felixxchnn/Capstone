@@ -163,3 +163,67 @@ fixed now so it cannot be improvised later:
   ACH-000364's single-line result does not read as cherry-picked.
 
 **Not computed in this pass.** Only the definition is recorded here.
+
+---
+
+## 2026-08-31 — Presentation / UI expansion (no scientific scope change)
+
+**Approved by:** Felix, this session ("Install Node LTS, then do everything" in answer to
+the Node-runtime blocker; the task brief itself is the scope statement).
+
+**Current approved scope before this change:** Phase 1 is the validated scientific core
+(frozen negative result: ridge_pca 0.2356 vs ridge_head 0.2047, Δ −0.0308). The Phase 2
+application layer (`sample_profile.py`, `evidence.py`, `reconstruct_fitted.py` /
+`fitted_artifacts.py`, `case_study.py` → `case_study.json`, `report.py` →
+`phase2_report.html`, `checks.py` §9–12) is complete and validated. E1 (the
+random-projection control) is done.
+
+**Change:** a **presentation / UI expansion and polish pass** — not a new experiment.
+
+1. **`ui/`** — a new modular React + TypeScript application. It is a *connected presentation
+   layer*: it reads the committed `data/processed/case_study.json` (byte-verified copy,
+   hash-pinned) through a single `CapstoneDataSource` interface and **performs no model
+   inference**. A future Python inference backend can replace the static adapter with no
+   component change; the contract is documented, no fake endpoints exist. It adds an
+   interactive 3D viewer for the **protein encoded by a selected gene** (UniProt → RCSB PDB
+   → AlphaFold → Mol\*), contacted with identifiers only.
+2. **`phase2_report.html`** — redesigned via its generator (`report.py`) to the same design
+   system. It **remains** a single self-contained offline file: no network, no CDN, no
+   fetch/XHR, deterministically generated, byte-identical rebuild, embedded
+   `case_study.json` byte-identical to the committed artifact.
+
+**Material-change checklist (CLAUDE.md §13) — nothing material changes:**
+
+- *Population / unit of analysis:* unchanged (DepMap Public 26Q1 + the two named Phase 2
+  samples `ACH-000364`, `BG003082`).
+- *Input data:* unchanged. `ui/` reads the committed case study; live protein-structure
+  retrieval sends only gene / protein identifiers and human taxonomy `9606` to public
+  structural databases — never expression or prediction data — and is **separate from
+  prediction**: it does not affect any ranking, metric, or conclusion.
+- *Prediction target / label:* unchanged (per-target CRISPR gene effect; frozen top-25
+  rankings from the committed artifact).
+- *Evaluation metric:* unchanged; no new evaluation is performed. Model-comparison overlap
+  and rank-difference figures shown in both interfaces are **descriptive UI comparisons**,
+  explicitly not performance evaluations, and `ridge_pca` / `ridge_head` are never merged
+  into a consensus.
+- *Intended user / use case:* unchanged core question; the interfaces make the *committed*
+  result legible for a first-time viewer and a presentation.
+- *Scientific claim:* none added. Drug–gene evidence stays retrieval, not efficacy. A
+  predicted (AlphaFold) protein structure is labelled predicted and is structural evidence
+  about the protein, **not** drug-response evidence and not proof of function.
+- *Experimental / patient-level / clinical evidence distinction:* preserved. BG003082 stays
+  `exploratory_external_prediction` / `unavailable` with the domain-shift caveat; no
+  invented observed values; no empty chart implying a measurement.
+
+**No test evaluation occurred.** No test-split expression features, outcomes, predictions,
+rankings, metrics, or performance numbers were read, computed, or displayed by either
+interface. `checks.py` reads `splits.json` labels only for integrity / role assertions.
+
+**Protected artifacts:** `case_study.json` (`a962c01a…`) and
+`random_projection_results.json` (`4adfb78b…`) unchanged. `phase2_report.html` SHA-256
+changed intentionally `f4a093b0…` → `91fbb016…` (generator redesign; `config.REPORT_HTML_SHA256`
+and the two capstone docs updated, previous hash kept as provenance). Phase 1 artifacts,
+fitted-model artifacts, evidence snapshot, and E1 result untouched.
+
+**Record:** approved and implemented 2026-08-31. Node.js v22.23.2 was installed as a
+portable extract at `C:\Users\Leo He\tools\node` to build `ui/`.

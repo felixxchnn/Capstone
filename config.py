@@ -428,8 +428,15 @@ REPORT_SCHEMA_VERSION = "phase2-report/1"
 CASE_STUDY_JSON_SHA256 = (
     "a962c01a5b65a6ef579ea57dced67048bf9016ba0f66aab2355cf1f054796e8c"
 )
+# 2026-08-31: phase2_report.html was redesigned (generator-only change in
+# report.py -- green/white/black design system, hero + plain-language intro,
+# sticky section nav, result cards, a model-comparison section, reset-filters +
+# empty state, responsive/print polish). The embedded case_study.json is
+# byte-identical to the committed artifact and no scientific value changed.
+# Previous approved hash (pre-redesign):
+#   f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163  (339,626 B)
 REPORT_HTML_SHA256 = (
-    "f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163"
+    "91fbb016342ded7106d1cf3818c57c5b13a1dbe0c9a70d06d71f9f1ac536c8d5"
 )
 
 # --------------------------------------------------------------------------

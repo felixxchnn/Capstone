@@ -81,6 +81,42 @@ python baseline.py          # the number to beat
 Each script prints what to run next. Run them in that order; each depends on
 the previous one's output.
 
+## The two interfaces
+
+Both present the **committed** predictions from `data/processed/case_study.json`. Neither
+runs a model.
+
+**1. Offline report — `phase2_report.html`** (no dependencies, no network)
+
+```bash
+py report.py --build       # regenerate the self-contained HTML
+py report.py --validate    # 26 structural checks + headless-Chrome interaction smoke
+```
+
+Then open `phase2_report.html` in any browser (double-click, or a `file://` URL). It is a
+single deterministic file: green/white/black design, hero + plain-language intro, sticky
+section nav, Phase 1 result cards, sample/model controls, search + evidence filters, ordered
+25-row dependency tables, a side-by-side model-comparison section (the two rankings are never
+merged), and collapsible methods/limitations. Interactive protein structures are **not** in
+this file — they need interface 2.
+
+**2. Connected app — `ui/`** (React + TypeScript; needs Node ≥ 20.19)
+
+```bash
+cd ui
+npm install
+npm run dev        # http://localhost:5173
+npm run lint && npm run typecheck && npm run test -- --run && npm run build
+```
+
+Same design system, five destinations (Overview · Dependency Explorer · Model Comparison ·
+Protein Structure · Methods). The **Protein Structure** page maps a gene's Entrez ID to a
+reviewed human UniProt entry, lists experimental RCSB PDB structures, falls back to an
+AlphaFold predicted model (clearly labelled), and renders it with Mol\*. It reads the same
+committed case study through a `CapstoneDataSource` interface that a future Python inference
+backend can implement without changing any component (`ui/src/data/adapters/ApiDataSource.contract.md`).
+Details: [`ui/README.md`](ui/README.md).
+
 ### Required files
 
 | Logical name | Expected filename |
@@ -153,7 +189,8 @@ independently of the code that built the file.
 | `reconstruct_fitted.py` | Phase 2. Re-fits the identical `impute → StandardScaler → PCA(200) → Ridge` (baseline) and `impute → StandardScaler → Ridge` (head) pipelines on **exactly the committed `train` split** at the alpha **read from** the results JSONs, and serialises plain `.npy` + `manifest.json` under `data/processed/reconstructed_fitted/`. **Reconstructed fitted state, not the unavailable original Phase 1 objects.** `--validate` reproduces every committed val statistic at 4 dp; `--check-determinism` rebuilds byte-identically. |
 | `fitted_artifacts.py` | Phase 2. Loads the reconstructed fitted state with **numpy + stdlib only — no sklearn, no `fit()`**. Closed-form `predict(X)`; every `.npy` SHA-256-verified against the manifest on load. |
 | `case_study.py` | Phase 2. Orchestrates the two reconstructed models over `ACH-000364` (val anchor) and `BG003082` (external) into one deterministic `data/processed/case_study.json`: top-25 ranked predicted dependencies per model per sample, drug–gene interaction evidence for the displayed genes (retrieved **after** rankings freeze), and the locked five-line osteosarcoma descriptive aggregate. Imports no sklearn; writes explicit CRLF bytes and stamps the frozen reconstruction environment so regeneration is byte-identical on any OS. `--validate` = 43 checks. |
-| `report.py` | Phase 2. Renders the committed `case_study.json` into one self-contained offline **`phase2_report.html`** — no inference, no evidence lookup, no network/CDN. `--validate` = 25 structural checks + a headless-Chrome interaction smoke test when a browser is present. |
+| `report.py` | Phase 2. Renders the committed `case_study.json` into one self-contained offline **`phase2_report.html`** — no inference, no evidence lookup, no network/CDN. Redesigned 2026-08-31 to the `ui/` design system (hero, sticky nav, result cards, model-comparison section, reset-filters + empty state). `--validate` = 26 structural checks + a headless-Chrome interaction smoke test when a browser is present. |
+| `ui/` | Connected React + TypeScript presentation layer (Vite / Vitest). Reads the committed `case_study.json` through a `CapstoneDataSource` interface; performs **no model inference**. Adds an interactive Mol\* viewer for the protein encoded by a selected gene (UniProt → RCSB → AlphaFold). See [`ui/README.md`](ui/README.md). |
 
 `prepare_geneformer_input.py` and `run_geneformer_embeddings.py` produced
 `data/processed/geneformer_embeddings.csv`, but ran on Kaggle and are not

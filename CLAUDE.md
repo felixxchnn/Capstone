@@ -192,7 +192,9 @@ attrition zero.
 
 ## 7. Module map
 
-Twenty-one modules today; Phase 2 (§9.7) adds more. Seventeen have been read in full.
+Twenty-one Python modules today; Phase 2 (§9.7) adds more. Seventeen have been read in full.
+Plus the `ui/` React + TypeScript app (§7a) — a presentation layer only, not part of the
+scientific pipeline.
 
 | Module | Role | Read? |
 |---|---|---|
@@ -211,12 +213,43 @@ Twenty-one modules today; Phase 2 (§9.7) adds more. Seventeen have been read in
 | `reconstruct_fitted.py` | Phase 2 (2026-08-29). Builds **reconstructed** fitted state for the two frozen Phase 1 linear models: re-fits `impute(train-mean) → StandardScaler → PCA(200) → Ridge` (baseline) and `impute → StandardScaler → Ridge` (head) on **exactly the committed `train` split**, at the alpha **read from** `baseline_results.json` / `head_results.json` (100000.0 / 3162.0 — no selection re-run). Serialises plain `.npy` + `manifest.json` under `data/processed/reconstructed_fitted/{baseline_ridge_pca,head_ridge_head}/`. **Not the original Phase 1 objects** (never serialised) — a reproducibility convenience for `case_study.py`. `--build` / `--validate` (reproduces every committed val statistic exactly at 4 dp) / `--check-determinism` (byte-identical rebuild) / `--verify` (13/13 checklist) / `--self-test`. Ten committed inputs gated against their SHA-256 at base commit `12fab80`; refuses to build if any moved. | yes (authored) |
 | `fitted_artifacts.py` | Phase 2 loader for the above. **numpy + stdlib only — no sklearn import, no `fit()` / `fit_transform()`.** `load_baseline_ridge_pca()` / `load_head_ridge()` → objects with `.predict(X)` (closed-form scale → PCA → ridge / scale → ridge), `.assert_feature_order()` / `.assert_target_order()`, `.alpha`. Every `.npy` and label file is SHA-256-verified against the artifact's own `manifest.json` on load; any mismatch / malformed manifest / shape-dtype disagreement hard-fails. | yes (authored) |
 | `case_study.py` | Phase 2 (2026-08-29). Orchestrates the two reconstructed models over **ACH-000364** (U-2 OS, `val`, verification anchor — `held_out_prediction`/`measured_crispr`; observed CRISPR attached *after* ranking, verification only) and **BG003082** (osteosarcoma tumour, absent from every split — `exploratory_external_prediction`/`unavailable`, no observed data). Writes one deterministic `data/processed/case_study.json` (schema `case-study/1`): top-25 ranked predicted dependencies per model per sample (ascending predicted GeneEffect = stronger dependency, numeric-Entrez tie-break), drug-gene interaction evidence for the displayed genes (`evidence.get_evidence_for_gene`, retrieved **after** rankings freeze), and the locked five-line osteosarcoma descriptive aggregate. **Imports no sklearn, calls no `fit()`/`fit_transform()`, never imports `reconstruct_fitted`** (AST-checked); inference is `fitted_artifacts` only. `baseline.per_target_spearman` (pure numpy/scipy) is the sole `baseline` use, for the mandated osteosarcoma metric. `--build` / `--validate` (43/43, byte-identical regen ×2, protected artifacts unchanged) / `--self-test`. **Cross-platform reproducibility repair (2026-08-30, generator code only — `case_study.json` bytes and SHA-256 `a962c01a…` unchanged):** `_write_json_deterministic` now writes explicit CRLF bytes via `write_bytes` (was `Path.write_text`, which emitted LF on POSIX); the artifact's `environment` block is read from the reconstructed-fitted baseline manifest (Python 3.14.6 / numpy 2.5.0 / pandas 3.0.3 / scipy 1.18.0), not `platform.python_version()` / `np.__version__` at runtime; `_preflight` hard-fails unless the baseline and head reconstruction manifests carry identical `environment` data; `SCHEMA_VERSION` = `config.CASE_STUDY_SCHEMA_VERSION`. | yes (authored) |
-| `report.py` | Phase 2 (2026-08-29). Renders the committed `case_study.json` into one self-contained offline **`phase2_report.html`** (schema `phase2-report/1`, repo root, `.gitattributes` `-text`). **No inference, no evidence lookup, no recomputation** — reads only hash-pinned committed artifacts (`case_study.json`, `baseline_results.json`/`head_results.json`/`analysis_results.json` for the section-B Phase 1 headline, DGIdb `manifest.json` for release/vintage/licence/~19%-coverage facts). CSS + JS embedded locally; no CDN / remote font / analytics; opens from `file://`; byte-identical rebuild; no wall-clock, no absolute path. Sections A–I: header + "Research demonstration — not clinical guidance", frozen Phase 1 result, sample/model selectors (ridge_pca and ridge_head never merged), 25-row ranked dependency tables (observed cols only for ACH-000364), expandable "Drug–gene interaction evidence" grouped under each gene, sample interpretation, osteosarcoma descriptive aggregate, collapsible methods/provenance/limitations. `--build` / `--validate` (25 structural checks + headless-Chrome interaction smoke: selectors/search/filter/expand) / `--self-test`. Claim-language gate hard-fails on prohibited framing in rendered prose. `REPORT_SCHEMA` / `CASE_STUDY_SCHEMA_EXPECTED` / `CASE_STUDY_SHA256` now reference `config.REPORT_SCHEMA_VERSION` / `config.CASE_STUDY_SCHEMA_VERSION` / `config.CASE_STUDY_JSON_SHA256` (2026-08-30; HTML bytes and SHA-256 `f4a093b0…` unchanged). | yes (authored) |
+| `report.py` | Phase 2 (2026-08-29). Renders the committed `case_study.json` into one self-contained offline **`phase2_report.html`** (schema `phase2-report/1`, repo root, `.gitattributes` `-text`). **No inference, no evidence lookup, no recomputation** — reads only hash-pinned committed artifacts (`case_study.json`, `baseline_results.json`/`head_results.json`/`analysis_results.json` for the section-B Phase 1 headline, DGIdb `manifest.json` for release/vintage/licence/~19%-coverage facts). CSS + JS embedded locally; no CDN / remote font / analytics; opens from `file://`; byte-identical rebuild; no wall-clock, no absolute path. Sections A–I: header + "Research demonstration — not clinical guidance", frozen Phase 1 result, sample/model selectors (ridge_pca and ridge_head never merged), 25-row ranked dependency tables (observed cols only for ACH-000364), expandable "Drug–gene interaction evidence" grouped under each gene, sample interpretation, osteosarcoma descriptive aggregate, collapsible methods/provenance/limitations. `--build` / `--validate` (**26** structural checks + headless-Chrome interaction smoke driving **10** interactions: sample/model selectors, search, evidence filter, reset-filters, expand/collapse, empty state, model-comparison view) / `--self-test`. Claim-language gate hard-fails on prohibited framing in rendered prose. **Redesigned 2026-08-31** (generator-only change in `report.py`): the `ui/` green/white/black design system, dark hero + code-native DNA-helix SVG + plain-language intro, sticky section nav, Phase 1 result cards, a new `section-comparison` block (two independent top-25 lists side by side per sample, overlap + rank-diff, **never merged**), a Reset-filters button + `#no-results` empty state, responsive/print polish. Embedded `case_study.json` byte-identical to the committed artifact; no scientific value changed. Committed HTML sha256 `91fbb016342ded7106d1cf3818c57c5b13a1dbe0c9a70d06d71f9f1ac536c8d5` (384,347 B, LF); prior approved `f4a093b0…` (339,626 B) kept in `config.py` as provenance. `config.REPORT_HTML_SHA256` updated. | yes (authored) |
 | `splits.py` | Patient-grouped, lineage-stratified split generation | no |
-| `checks.py` | Integrity assertions; fails the run on group straddling. **12 sections, 55 fail-closed checks.** Sections 1–8 are the original dataset-integrity portion (**32/32**, unchanged — PRISM and osteosarcoma coverage included). Sections 9–12 (added 2026-08-30, commit after `6837121`) integrate the Phase 2 application layer: §9 committed-artifact identity + SHA-256 (`case_study.json` vs `config.CASE_STUDY_JSON_SHA256`, `phase2_report.html` vs `config.REPORT_HTML_SHA256`, strict JSON parse, schema version); §10 sample reconciliation + leakage prevention (`ACH-000364`/`BG003082` roles and split membership, a fresh `sample_profile.load_external_sample()` compared byte-for-byte against the committed reconciliation, the 18,427 + 33 = 18,460 / 1,407 + 17,020 = 18,427 counts, no id collisions, no symbol fallback); §11 rankings + evidence (`case_study.validate` 43/43, `evidence.validate_snapshot` 34/34, 2×25 ranked rows, derived 56-gene evidence union, coverage reconciliation, tier/source/disclaimer vocabulary, cross-checked DGIdb hashes); §12 offline-report integrity (`report.validate` 25/25, embedded JSON == committed `case_study.json`, no `<script src>` / external stylesheet / `@import url()` / `fetch(` / `XMLHttpRequest`, fixed non-efficacy disclaimer present). stdlib helpers: `_sha256_file`, `_load_strict_json` (rejects `NaN`/`Infinity`/`-Infinity`). A missing file or hash mismatch is a hard `[FAIL]`, never a skip. | yes (authored) |
+| `checks.py` | Integrity assertions; fails the run on group straddling. **12 sections, 55 fail-closed checks.** Sections 1–8 are the original dataset-integrity portion (**32/32**, unchanged — PRISM and osteosarcoma coverage included). Sections 9–12 (added 2026-08-30, commit after `6837121`) integrate the Phase 2 application layer: §9 committed-artifact identity + SHA-256 (`case_study.json` vs `config.CASE_STUDY_JSON_SHA256`, `phase2_report.html` vs `config.REPORT_HTML_SHA256`, strict JSON parse, schema version); §10 sample reconciliation + leakage prevention (`ACH-000364`/`BG003082` roles and split membership, a fresh `sample_profile.load_external_sample()` compared byte-for-byte against the committed reconciliation, the 18,427 + 33 = 18,460 / 1,407 + 17,020 = 18,427 counts, no id collisions, no symbol fallback); §11 rankings + evidence (`case_study.validate` 43/43, `evidence.validate_snapshot` 34/34, 2×25 ranked rows, derived 56-gene evidence union, coverage reconciliation, tier/source/disclaimer vocabulary, cross-checked DGIdb hashes); §12 offline-report integrity (`report.validate` 26/26, embedded JSON == committed `case_study.json`, no `<script src>` / external stylesheet / `@import url()` / `fetch(` / `XMLHttpRequest`, fixed non-efficacy disclaimer present). stdlib helpers: `_sha256_file`, `_load_strict_json` (rejects `NaN`/`Infinity`/`-Infinity`). A missing file or hash mismatch is a hard `[FAIL]`, never a skip. | yes (authored) |
 | `make_fixture.py` | Synthetic fixture generation mirroring real DepMap file structure, including a synthetic Bone/Osteosarcoma subset and a synthetic PRISM matrix | yes |
 | `run_geneformer_embeddings.py` | Embedding extraction; ran on Kaggle | no |
 | `inspect_data.py` | Ad-hoc inspection, three hard-coded raw filenames read via bare `pd.read_csv`, not `config.resolve_file`/`RAW_DIR`. Unrunnable from a clone (raw CSVs gitignored) even before that. Ship-or-cut undecided. | yes |
+
+### 7a. `ui/` — connected React + TypeScript presentation layer (added 2026-08-31)
+
+A modular Vite 8 / React 19 / TS 5.9 app (Vitest 4 + RTL, ESLint 9). **Presentation
+only — it performs no model inference and touches no test-split data.** It reads the
+committed `data/processed/case_study.json` as its single scientific source: a Node sync
+script (`ui/scripts/sync-case-study.mjs`, run on predev/prebuild/pretest) copies it
+**verbatim** into `ui/src/data/case_study.generated.json`; a test asserts that copy is
+byte-identical to the committed file and matches the pinned hash `a962c01a…` (from
+`capstone/data-integrity-hashes.md`).
+
+- **Data seam:** `ui/src/data/CapstoneDataSource.ts` is the one interface every component
+  uses; `StaticCaseStudyDataSource` is the only implementation;
+  `ui/src/data/adapters/ApiDataSource.contract.md` documents a future Python backend but
+  nothing fake is built. No `runInference` method anywhere.
+- **Pages:** Overview · Dependency Explorer · Model Comparison · Protein Structure ·
+  Methods. `ridge_pca` / `ridge_head` never merged; evidence framed as retrieval;
+  ACH-000364 observed values labelled "attached after ranking"; BG003082 shows
+  "outcome unavailable" + domain-shift warning; lineage_mean / mlp_head / E1 mentioned in
+  prose only, never selectable.
+- **Protein Structure explorer** (`ui/src/data/providers/`, `ui/src/components/structures/`):
+  Entrez → reviewed human UniProt (taxonomy 9606) → experimental RCSB PDB candidates
+  (listed, user-picks) → AlphaFold DB predicted-model fallback (labelled predicted; file
+  URLs read from the API, never guessed) → Mol* (`molstar` 5.11, lazy chunk, WebGL guard,
+  error boundary). Only identifiers are sent to those services. True translated "exploded"
+  mode is **not** faked — component isolation is delegated to Mol*'s own Components panel.
+- **Build/test:** `cd ui && npm install && npm run lint && npm run typecheck && npm run test -- --run && npm run build`
+  (all green; 49 unit tests, network mocked). Dev-only live smokes: `npm run smoke:structure`
+  (real UniProt/RCSB/AlphaFold) and `node scripts/browser-smoke.mjs` (route screenshots).
+- **Node:** portable install at `C:\Users\Leo He\tools\node` (v22.23.2) — not system-managed;
+  add to PATH. `ui/node_modules`, `ui/dist`, `ui/.smoke` are git-ignored.
 
 **`data/processed`** holds 19 tracked files directly: the 15 Phase 1 artifacts, plus
 `ensembl_map.csv` (added `d78fbf8`), plus the Phase 2 BG003082 Geneformer sidecar
@@ -509,11 +542,25 @@ osteosarcoma aggregate (mean per-target Spearman `ridge_pca` 0.119436 vs `ridge_
 0.082773 over 4,255 common targets; Δ −0.036663; descriptive, unstable at n=5, **not** a
 replacement for the frozen Phase 1 result). `--validate` 43/43, byte-identical regen.
 
-**`report.py` and `phase2_report.html` now exist** (2026-08-29, sha256 `f4a093b0…`,
-339,626 B). Self-contained offline HTML rendered from `case_study.json` — no inference /
-evidence lookup / recomputation, no CDN or network, byte-identical rebuild, headless-Chrome
-interaction smoke test green. **To view: open `phase2_report.html` in any modern browser
-(double-click, or a `file://` URL) — no server, no build step, no network.**
+**`report.py` and `phase2_report.html` now exist** (2026-08-29). Self-contained offline HTML
+rendered from `case_study.json` — no inference / evidence lookup / recomputation, no CDN or
+network, byte-identical rebuild, headless-Chrome interaction smoke test green. **To view:
+open `phase2_report.html` in any modern browser (double-click, or a `file://` URL) — no
+server, no build step, no network.**
+
+**Offline report redesigned (2026-08-31, generator-only change in `report.py`).** Same
+green/white/black design system as the `ui/` app: dark near-black hero with a code-native
+DNA-helix SVG + plain-language intro, sticky section nav, Phase 1 result cards, a new
+**Model comparison** section (`id="section-comparison"` — two independent top-25 lists side by
+side per sample, overlap + rank-diff, never merged), a Reset-filters button + a `#no-results`
+empty state, and responsive/print polish. **The embedded `case_study.json` is byte-identical
+to the committed artifact and no scientific value changed.** `report.py --validate` is now
+**26 structural checks** (added a sticky-nav check) + the browser smoke drives 10 interactions
+(adds reset-filters, empty-state, comparison-view). New committed bytes: sha256
+`91fbb016342ded7106d1cf3818c57c5b13a1dbe0c9a70d06d71f9f1ac536c8d5`, 384,347 B, LF; previous
+approved hash `f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163` (339,626 B)
+is kept in `config.py` as provenance. `config.REPORT_HTML_SHA256` updated to the new value;
+`checks.py` §9/§12 re-verify against it (still 55/55).
 
 **Phase 2 checks integration is complete** (2026-08-30, commit after `6837121`).
 `checks.py` now runs **55 fail-closed checks in 12 sections**: the dataset-integrity
@@ -532,7 +579,9 @@ reconstructed-fitted baseline manifest (the frozen build environment), not runti
 four schema/hash constants moved to `config.py` (`CASE_STUDY_SCHEMA_VERSION`,
 `REPORT_SCHEMA_VERSION`, `CASE_STUDY_JSON_SHA256`, `REPORT_HTML_SHA256`). **The committed
 `case_study.json` is byte-identical — SHA-256 still `a962c01a5b65a6ef579ea57dced67048bf9016ba0f66aab2355cf1f054796e8c`;
-`phase2_report.html` still `f4a093b0…`.** No Phase 1 artifact, metric, or result changed.
+`phase2_report.html` was `f4a093b0…` at the time of that task (redesigned 2026-08-31 →
+`91fbb016…`; see the "Offline report redesigned" note above).** No Phase 1 artifact, metric,
+or result changed.
 
 **Phase 2 scope-drift check (2026-08-30) — no material change.** This task added integrity
 checks and a cross-platform-reproducibility repair only. Unchanged: the dataset (DepMap

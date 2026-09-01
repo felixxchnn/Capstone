@@ -410,21 +410,38 @@ unchanged frozen training data"* — not the unavailable historical fitted objec
 ### Added with the offline HTML report (`report.py`)
 
 ```
-f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163     339,626  phase2_report.html
+91fbb016342ded7106d1cf3818c57c5b13a1dbe0c9a70d06d71f9f1ac536c8d5     384,347  phase2_report.html
 ```
+
+**Redesign — 2026-08-31 (generator-only change in `report.py`; SHA-256
+`f4a093b0…` (339,626 B) → `91fbb016…` (384,347 B)).** The offline report was restyled to
+the same green/white/black design system as the connected `ui/` app: a dark near-black hero
+with a code-native DNA-helix SVG + plain-language intro, a sticky section nav, Phase 1
+result cards, a new **Model comparison** section (`id="section-comparison"` — the two
+independent top-25 lists side by side per sample, gene-overlap count and rank/predicted
+differences, **never merged into a consensus**), a Reset-filters button, a `#no-results`
+empty state, and responsive/print polish. `report.py --validate` gained a sticky-nav check
+(**25 → 26 structural checks**) and the browser smoke now drives **10** interactions
+(adds reset-filters, empty-state, comparison-view). Only `report.py` (the generator) and
+`config.REPORT_HTML_SHA256` changed. **The embedded `case_study.json` is byte-identical to
+the committed artifact, and no ranking, metric, evidence record, hash of any other artifact,
+or scientific conclusion changed.** The previous approved hash
+`f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163` is retained in
+`config.py` as provenance.
 
 **`phase2_report.html`** — one self-contained offline HTML rendering of
 `data/processed/case_study.json` (schema `phase2-report/1`). `.gitattributes` marks it
-`-text` so the SHA-256 survives a clone byte-exact on any platform. `py report.py --build`
-writes it; **`py report.py --build` twice is byte-identical**; `py report.py --validate`
-(25 structural checks) regenerates twice and byte-compares, verifies the embedded
-`case_study.json` round-trips and equals the hash-pinned committed file, checks every
-required section / headline string / warning, the 4 sample·model views with 25 rows each,
-evidence-count reconciliation, ID uniqueness, internal control targets, `</script>`
-escaping, no remote script/style/font/analytics dependency, no absolute path, no wall-clock,
-and runs a headless-browser interaction smoke test (Chrome, already installed — no new
-dependency) driving the sample/model selectors, search, evidence-status filter and
-expand/collapse.
+`-text` so the SHA-256 survives a clone byte-exact on any platform; `report.py` writes it
+with explicit LF. `py report.py --build` writes it; **`py report.py --build` twice is
+byte-identical**; `py report.py --validate` (**26** structural checks) regenerates twice
+and byte-compares, verifies the embedded `case_study.json` round-trips and equals the
+hash-pinned committed file, checks every required section (incl. `section-comparison`) /
+headline string / warning, the 4 sample·model views with 25 rows each, evidence-count
+reconciliation, ID uniqueness, internal control targets, `</script>` escaping, no remote
+script/style/font/analytics dependency, no absolute path, no wall-clock, and runs a
+headless-browser interaction smoke test (Chrome, already installed — no new dependency)
+driving the sample/model selectors, search, evidence-status filter, reset-filters,
+expand/collapse, the empty state, and the model-comparison view.
 
 **What `report.py` does NOT do.** No model inference, no evidence lookup, no scientific
 recomputation. It reads only committed, hash-pinned artifacts: `case_study.json`
@@ -530,7 +547,9 @@ runs on any environment. `--self-test` covers the synthetic path offline and is 
 `baseline_results.json` `b49169bd…`, `head_results.json` `1962206f…`, `analysis_results.json`
 `12431dad…`, every Phase 1 matrix, `case_study.json`
 `a962c01a5b65a6ef579ea57dced67048bf9016ba0f66aab2355cf1f054796e8c`, `phase2_report.html`
-`f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163`, and the
+`f4a093b04bdda3e573056e2d1e2dbdde86e75cee84adf723b7b94a94dc705163` (at the time of the E1
+addition — subsequently redesigned 2026-08-31, generator-only, → `91fbb016…`; see the
+"Added with the offline HTML report" section above), and the
 `reconstructed_fitted/` subtree all verify identical. `random_projection.py` reads these
 files and never writes them; its only tracked outputs are
 `data/processed/random_projection_results.json` and the E1-only environment spec

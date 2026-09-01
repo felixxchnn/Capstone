@@ -262,74 +262,186 @@ def load_verified() -> dict:
 
 _CSS = """
 :root{
-  --bg:#ffffff; --fg:#1a1d21; --muted:#54606c; --line:#d4dae0; --panel:#f5f7f9;
-  --accent:#0b5cad; --accent-fg:#ffffff;
-  --cited:#1a7f37; --source-only:#8a6d00; --none:#5a6673;
-  --warn-bg:#fff4e5; --warn-line:#e0a44a;
+  --near-black:#07110B; --emerald:#087A45; --bio-green:#18A866;
+  --mint:#DDF7E8; --off-white:#F7FBF8; --white:#FFFFFF;
+  --bg:var(--off-white); --surface:#ffffff; --surface-2:#eef6f0; --sunken:#e6f1ea;
+  --fg:#0c1a12; --muted:#5c6f64; --soft:#33473b;
+  --line:#cfe3d6; --line-strong:#a9cdb7;
+  --accent:var(--emerald); --accent-strong:#0a6b3d; --accent-bright:var(--bio-green);
+  --accent-fg:#ffffff; --accent-tint:var(--mint);
+  --focus:#0f8a4e;
+  --cited:#0a6b3d; --cited-bg:#e2f3e9;
+  --source-only:#7a5a00; --source-only-bg:#fbf1d8;
+  --none:#5c6f64; --none-bg:#eef1ef;
+  --warn-ink:#7a4b00; --warn-bg:#fdf3e2; --warn-line:#e0a44a;
+  --dark-ink:#eaf6ee; --dark-soft:#a7c9b4; --dark-line:#1e3a29;
+  --radius:12px; --radius-sm:8px; --maxw:1080px;
 }
 *{box-sizing:border-box}
-html{font-size:16px}
+html{font-size:16px;scroll-behavior:smooth;scroll-padding-top:4.5rem}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
 body{margin:0;background:var(--bg);color:var(--fg);
-  font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
-main{max-width:1040px;margin:0 auto;padding:1.25rem 1.1rem 4rem;}
-h1{font-size:1.7rem;margin:.2rem 0 .4rem;line-height:1.25}
-h2{font-size:1.28rem;margin:2.1rem 0 .6rem;border-bottom:2px solid var(--line);padding-bottom:.25rem}
-h3{font-size:1.05rem;margin:1.3rem 0 .4rem}
+  font:16px/1.6 "Inter","Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 clamp(1rem,3vw,2rem)}
+main{padding-bottom:4rem}
+h1{font-size:clamp(1.7rem,1.2rem+2vw,2.5rem);margin:.1rem 0 .5rem;line-height:1.18;letter-spacing:-.02em}
+h2{font-size:1.4rem;margin:0 0 .7rem;line-height:1.2;letter-spacing:-.01em}
+h3{font-size:1.06rem;margin:1.2rem 0 .4rem}
 p{margin:.55rem 0}
-a{color:var(--accent)}
+a{color:var(--accent-strong);text-underline-offset:2px}
+a:hover{color:var(--accent-bright)}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,
-summary:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92em}
+summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--focus);outline-offset:2px;
+  box-shadow:0 0 0 3px rgba(15,138,78,.35);border-radius:4px}
+code,.mono{font-family:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}
 .small{font-size:.86rem;color:var(--muted)}
-.banner{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:8px;
-  padding:.7rem .9rem;margin:.8rem 0;font-weight:600}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:.85rem 1rem;margin:.8rem 0}
-.kv{display:grid;grid-template-columns:max-content 1fr;gap:.25rem .9rem;margin:.4rem 0}
-.kv div:nth-child(odd){color:var(--muted)}
-.controls{display:flex;flex-wrap:wrap;gap:1rem 1.4rem;align-items:flex-end;margin:.6rem 0 1rem}
-fieldset{border:1px solid var(--line);border-radius:8px;padding:.5rem .8rem .7rem;margin:0}
-legend{font-weight:600;padding:0 .35rem}
-.radio-row{display:flex;flex-wrap:wrap;gap:.4rem .9rem;margin-top:.3rem}
-.radio-row label{display:inline-flex;align-items:center;gap:.35rem;cursor:pointer}
-.field label{display:block;font-weight:600;margin-bottom:.25rem}
-input[type=search],select{font:inherit;padding:.4rem .5rem;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--fg);min-width:15rem}
-button{font:inherit;padding:.42rem .8rem;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);border-radius:6px;cursor:pointer}
-button.secondary{background:#fff;color:var(--accent)}
-.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
-table{border-collapse:collapse;width:100%;font-size:.94rem}
-caption{text-align:left;padding:.5rem .7rem;font-weight:600;background:var(--panel);border-bottom:1px solid var(--line)}
-th,td{padding:.45rem .6rem;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
-th[scope=col]{background:var(--panel);position:sticky;top:0}
-td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
-tr.gene-row:hover{background:#eef4fb}
-.pill{display:inline-block;padding:.05rem .5rem;border-radius:999px;font-size:.8rem;font-weight:600;border:1px solid}
-.pill.cited{color:var(--cited);border-color:var(--cited);background:#e8f5ec}
-.pill.source_only{color:var(--source-only);border-color:var(--source-only);background:#fbf3dd}
-.pill.none_in_filtered_snapshot{color:var(--none);border-color:var(--none);background:#eef1f4}
-.pill::before{content:"\\25CF  ";font-size:.7em;vertical-align:middle}
-details{border:1px solid var(--line);border-radius:8px;margin:.5rem 0;background:#fff}
-details>summary{cursor:pointer;padding:.55rem .8rem;font-weight:600;list-style:revert}
-details[open]>summary{border-bottom:1px solid var(--line)}
-.evi-body{padding:.4rem .8rem .7rem}
-.evi-record{border-top:1px dashed var(--line);padding:.5rem 0}
-.evi-record:first-child{border-top:0}
-.evi-record .kv{grid-template-columns:max-content 1fr}
-.disclaimer{color:var(--muted);font-style:italic;margin:.3rem 0}
-.view[hidden]{display:none}
-.hidden-row{display:none !important}
-.tag{display:inline-block;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:0 .4rem;margin:0 .15rem .15rem 0;font-size:.82rem}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip-link{position:absolute;left:1rem;top:-3rem;z-index:100;background:var(--surface);color:var(--accent-strong);
+  border:2px solid var(--accent);padding:.5rem .75rem;border-radius:var(--radius-sm);transition:top .15s}
+.skip-link:focus{top:.6rem}
+
+/* hero */
+.hero{background:
+  radial-gradient(1100px 460px at 82% -12%,rgba(24,168,102,.22),transparent 60%),
+  linear-gradient(180deg,var(--near-black),#0c1c13);
+  color:var(--dark-ink);border-bottom:1px solid var(--dark-line)}
+.hero .wrap{padding-top:clamp(2rem,5vw,3.6rem);padding-bottom:clamp(2rem,5vw,3.4rem)}
+.hero__grid{display:grid;grid-template-columns:1.5fr .5fr;gap:2rem;align-items:center}
+.hero h1{color:var(--dark-ink);max-width:24ch}
+.hero__eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:.78rem;font-weight:700;color:var(--bio-green);margin:0 0 .6rem}
+.hero__lede{color:var(--dark-soft);font-size:1.05rem;max-width:62ch}
+.hero__answer{display:inline-flex;gap:.6rem;align-items:baseline;background:rgba(24,168,102,.14);
+  border:1px solid rgba(24,168,102,.4);border-radius:var(--radius);padding:.6rem .9rem;font-weight:600;color:var(--dark-ink)}
+.hero__answer b{text-transform:uppercase;font-size:.72rem;letter-spacing:.1em;color:var(--bio-green)}
+.hero__art svg{width:min(100%,240px);filter:drop-shadow(0 12px 36px rgba(0,0,0,.45))}
+@media(prefers-reduced-motion:no-preference){
+  .hero__art .rungs{animation:drift 16s ease-in-out infinite alternate;transform-origin:160px 210px}
+}
+@keyframes drift{from{transform:rotate(-2deg)}to{transform:rotate(2deg)}}
+@media(max-width:820px){.hero__grid{grid-template-columns:1fr}.hero__art{order:-1}.hero__art svg{width:160px}}
+
+/* banner */
+.banner{display:flex;gap:.6rem;align-items:flex-start;background:var(--warn-bg);border:1px solid var(--warn-line);
+  border-radius:var(--radius-sm);padding:.7rem .95rem;margin:1rem 0;font-weight:600;color:var(--warn-ink)}
+.banner::before{content:"";flex:none;width:.6rem;height:.6rem;border-radius:50%;background:var(--warn-line);margin-top:.45rem}
+
+/* sticky section nav */
+.report-nav{position:sticky;top:0;z-index:30;background:var(--near-black);border-bottom:1px solid var(--dark-line)}
+.report-nav ul{list-style:none;margin:0;padding:.4rem clamp(1rem,3vw,2rem);display:flex;gap:.15rem;overflow-x:auto;
+  max-width:var(--maxw);margin:0 auto}
+.report-nav a{white-space:nowrap;color:var(--dark-soft);text-decoration:none;font-size:.85rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:var(--radius-sm)}
+.report-nav a:hover{color:var(--dark-ink);background:#0c1c13}
+.report-nav a[aria-current="true"]{color:var(--near-black);background:var(--bio-green)}
+
+section[id]{scroll-margin-top:4rem;padding-top:1.6rem;margin-top:1rem}
+section[id]>h2{border-bottom:2px solid var(--line);padding-bottom:.3rem}
+
+/* cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:.8rem;margin:1rem 0}
+.card{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--line-strong);
+  border-radius:var(--radius);padding:1rem}
+.card--strong{border-top-color:var(--accent-bright)}
+.card--delta{border-top-color:var(--warn-line)}
+.card .v{font-size:1.6rem;font-weight:700;letter-spacing:-.02em;margin:0;font-variant-numeric:tabular-nums}
+.card .k{font-weight:650;font-size:.9rem;margin:.2rem 0 0}
+.card .s{color:var(--muted);font-size:.8rem;margin:.15rem 0 0}
+
+.panel{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:.9rem 1.1rem;margin:.8rem 0}
+.callout{border:1px solid var(--line-strong);border-left:4px solid var(--accent);background:var(--accent-tint);
+  border-radius:var(--radius-sm);padding:.7rem 1rem;margin:.8rem 0}
+.callout--caution{border-color:var(--warn-line);border-left-color:var(--warn-line);background:var(--warn-bg);color:var(--warn-ink)}
+.callout b.t{display:block;margin-bottom:.15rem}
+.kv{display:grid;grid-template-columns:minmax(9rem,max-content) 1fr;gap:.28rem 1rem;margin:.5rem 0}
+.kv div:nth-child(odd){color:var(--muted)}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:1rem 1.4rem;align-items:flex-end;margin:.8rem 0 1rem;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:.9rem 1.1rem}
+fieldset{border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:.4rem .7rem .6rem;margin:0}
+legend{font-weight:650;padding:0 .35rem;font-size:.85rem}
+.radio-row{display:inline-flex;gap:2px;padding:3px;background:var(--surface-2);border-radius:var(--radius-sm);flex-wrap:wrap}
+.radio-row label{display:inline-flex;align-items:center;gap:.35rem;cursor:pointer;padding:.35rem .7rem;border-radius:6px;font-size:.9rem;font-weight:600;color:var(--soft)}
+.radio-row label:hover{background:var(--surface)}
+.radio-row input{position:absolute;opacity:0;width:1px;height:1px}
+.radio-row label:has(input:checked){background:var(--near-black);color:var(--dark-ink)}
+.radio-row label:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
+.field label{display:block;font-weight:650;margin-bottom:.25rem;font-size:.85rem;color:var(--soft)}
+input[type=search],select{font:inherit;padding:.45rem .6rem;border:1px solid var(--line-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--fg);min-width:15rem}
+button{font:inherit;font-weight:600;padding:.45rem .85rem;border:1px solid var(--accent);background:var(--accent);
+  color:var(--accent-fg);border-radius:var(--radius-sm);cursor:pointer}
+button.secondary{background:var(--surface);color:var(--accent-strong);border-color:var(--line-strong)}
+button.secondary:hover{background:var(--surface-2)}
+button:disabled{opacity:.55;cursor:not-allowed}
+.result-count{font-weight:650}
+.filter-flag{color:var(--accent-strong);font-weight:700}
+
+/* tables */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+caption{text-align:left;padding:.6rem .8rem;font-weight:650;background:var(--surface-2);border-bottom:1px solid var(--line)}
+th,td{padding:.5rem .7rem;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th[scope=col]{background:var(--surface-2);position:sticky;top:3.2rem;font-size:.76rem;text-transform:uppercase;letter-spacing:.03em;color:var(--soft)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:hover{background:var(--sunken)}
+.rank-chip{display:inline-grid;place-items:center;min-width:1.9rem;height:1.5rem;padding:0 .35rem;border-radius:6px;
+  background:var(--near-black);color:var(--dark-ink);font-weight:700;font-size:.78rem;font-variant-numeric:tabular-nums}
+
+/* pills */
+.pill{display:inline-flex;align-items:center;gap:.35em;padding:.08rem .55rem;border-radius:999px;font-size:.78rem;font-weight:650;border:1px solid}
+.pill::before{content:"";width:.5em;height:.5em;border-radius:50%;background:currentColor}
+.pill.cited{color:var(--cited);border-color:var(--cited);background:var(--cited-bg)}
+.pill.source_only{color:var(--source-only);border-color:var(--source-only);background:var(--source-only-bg)}
+.pill.none_in_filtered_snapshot{color:var(--none);border-color:var(--none);background:var(--none-bg)}
+
+/* disclosure */
+details{border:1px solid var(--line);border-radius:var(--radius-sm);margin:.5rem 0;background:var(--surface)}
+details>summary{cursor:pointer;padding:.6rem .85rem;font-weight:650;list-style:revert}
+details[open]>summary{border-bottom:1px solid var(--line)}
+.evi-body{padding:.5rem .85rem .8rem}
+.evi-record{border-top:1px dashed var(--line);padding:.55rem 0}
+.evi-record:first-child{border-top:0}
+.evi-record .kv{grid-template-columns:minmax(11rem,max-content) 1fr}
+.disclaimer{color:var(--muted);font-style:italic;margin:.3rem 0}
+
+.view[hidden],.cmp-view[hidden]{display:none}
+.hidden-row{display:none !important}
+#no-results{display:none;margin:.8rem 0;padding:1.4rem 1rem;text-align:center;border:1px dashed var(--line-strong);
+  border-radius:var(--radius);background:var(--surface-2);color:var(--soft)}
+#no-results.on{display:block}
+#no-results b{display:block;color:var(--fg)}
+.tag{display:inline-block;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:6px;
+  padding:0 .4rem;margin:0 .15rem .15rem 0;font-size:.82rem}
+
+/* model comparison */
+.cmp-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:760px){.cmp-grid{grid-template-columns:1fr}}
+.cmp-grid table{font-size:.82rem}
+tr.shared{background:var(--accent-tint)}
+.shared-dot{display:inline-block;width:.5rem;height:.5rem;margin-left:.3rem;border-radius:50%;background:var(--accent-bright);vertical-align:middle}
+.chip-list{list-style:none;margin:.3rem 0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
+.chip-list li{background:var(--surface-2);border:1px solid var(--line-strong);border-radius:999px;padding:.15rem .65rem;font-size:.8rem}
+
+footer{margin-top:3rem;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.85rem}
+
 @media (max-width:640px){
-  main{padding:1rem .7rem 3rem} h1{font-size:1.4rem}
+  h1{font-size:1.5rem} .cards{grid-template-columns:1fr 1fr}
   input[type=search],select{min-width:0;width:100%}
   .kv{grid-template-columns:1fr}
+  th[scope=col]{position:static}
 }
 @media print{
-  .controls,.noprint{display:none !important}
-  details{border:0} details>summary{display:none} .evi-body{padding:0}
-  .view[hidden]{display:block !important}
+  .report-nav,.controls,.noprint,.skip-link{display:none !important}
+  .hero{background:#fff;color:#000;border:0}
+  .hero h1,.hero__lede,.hero__answer{color:#000}
+  body{background:#fff}
+  details{border:0} details>summary{list-style:none;font-size:1rem}
+  details:not([open])>*:not(summary){display:none}
+  .view[hidden],.cmp-view[hidden]{display:block !important}
   a[href^="http"]::after{content:" (" attr(href) ")";font-size:.8em;color:#333;word-break:break-all}
-  tr,details,.panel{break-inside:avoid}
+  tr,details,.panel,.card,.callout{break-inside:avoid}
+  section[id]{break-inside:auto}
 }
 """
 
@@ -340,6 +452,7 @@ _JS = """
   function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
 
   var views = $all(".view");
+  var cmpViews = $all(".cmp-view");
   var live = $("#status-live");
   function currentSample(){ var el=$("input[name=sample]:checked"); return el? el.value : null; }
   function currentModel(){ var el=$("input[name=model]:checked"); return el? el.value : null; }
@@ -351,8 +464,9 @@ _JS = """
   function showView(){
     var target=activeView();
     views.forEach(function(v){ v.hidden = (v!==target); });
+    var s=currentSample(), m=currentModel();
+    cmpViews.forEach(function(v){ v.hidden = (v.id !== "cmp-"+s); });
     if(live && target){
-      var s=currentSample(), m=currentModel();
       live.textContent = "Showing "+s+" \u2014 model "+m;
     }
     applyFilters();
@@ -362,14 +476,12 @@ _JS = """
     var view=activeView(); if(!view) return;
     var q=($("#gene-search").value||"").trim().toLowerCase();
     var status=$("#evi-status").value;
-    // table rows
     $all("tr.gene-row", view).forEach(function(row){
       var hay=(row.getAttribute("data-search")||"").toLowerCase();
       var st=row.getAttribute("data-evidence-status");
       var ok = (!q || hay.indexOf(q)>-1) && (status==="all" || st===status);
       row.classList.toggle("hidden-row", !ok);
     });
-    // evidence groups
     $all(".evi-group", view).forEach(function(grp){
       var hay=(grp.getAttribute("data-search")||"").toLowerCase();
       var st=grp.getAttribute("data-evidence-status");
@@ -379,6 +491,16 @@ _JS = """
     var shown = $all("tr.gene-row", view).filter(function(r){ return !r.classList.contains("hidden-row"); }).length;
     var counter=$("#result-count");
     if(counter) counter.textContent = shown + " of 25 genes shown";
+    var filtering = (q !== "") || (status !== "all");
+    var flag=$("#filter-flag"); if(flag) flag.hidden = !filtering;
+    var reset=$("#reset-filters"); if(reset) reset.disabled = !filtering;
+    var nores=$("#no-results"); if(nores) nores.classList.toggle("on", shown === 0);
+  }
+
+  function resetFilters(){
+    var s=$("#gene-search"); if(s) s.value="";
+    var f=$("#evi-status"); if(f) f.value="all";
+    applyFilters();
   }
 
   function setDetails(open){
@@ -394,6 +516,24 @@ _JS = """
   var eb=$("#expand-all"); if(eb) eb.addEventListener("click", function(){ setDetails(true); });
   var cb=$("#collapse-all"); if(cb) cb.addEventListener("click", function(){ setDetails(false); });
   var pb=$("#print-btn"); if(pb) pb.addEventListener("click", function(){ window.print(); });
+  var rb=$("#reset-filters"); if(rb) rb.addEventListener("click", resetFilters);
+
+  // sticky section-nav highlighting
+  var navLinks = $all(".report-nav a");
+  var byId = {};
+  navLinks.forEach(function(a){ byId[a.getAttribute("href").slice(1)] = a; });
+  if(window.IntersectionObserver && navLinks.length){
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          navLinks.forEach(function(a){ a.removeAttribute("aria-current"); });
+          var a = byId[e.target.id];
+          if(a) a.setAttribute("aria-current","true");
+        }
+      });
+    }, { rootMargin: "-45% 0px -50% 0px" });
+    $all("main section[id]").forEach(function(s){ if(byId[s.id]) obs.observe(s); });
+  }
 
   showView();
   document.documentElement.setAttribute("data-js-ready","ok");
@@ -553,6 +693,147 @@ def _collapsible(title: str, body_html: str, *, open_: bool = False) -> str:
             f'<div>{body_html}</div></details>')
 
 
+# section id -> short nav label (order = document order)
+_NAV_SECTIONS = (
+    ("section-header", "Overview"),
+    ("section-phase1", "Frozen result"),
+    ("section-samples", "Sample & model"),
+    ("section-table", "Dependencies"),
+    ("section-comparison", "Model comparison"),
+    ("section-interpretation", "Sample info"),
+    ("section-osteo", "Osteosarcoma"),
+    ("section-methods", "Methods"),
+)
+
+
+def _helix_svg() -> str:
+    """Code-native DNA double-helix + molecular-node hero mark (decorative)."""
+    rungs = []
+    import math
+    for i in range(13):
+        y = 24 + i * 30
+        phase = math.sin((i / 13) * math.pi * 3)
+        x1 = 160 - phase * 66
+        x2 = 160 + phase * 66
+        rungs.append(
+            f'<line x1="{x1:.1f}" y1="{y}" x2="{x2:.1f}" y2="{y}" stroke="#087A45" '
+            f'stroke-width="2" opacity="0.55"/>'
+            f'<circle cx="{x1:.1f}" cy="{y}" r="3.4" fill="#18A866"/>'
+            f'<circle cx="{x2:.1f}" cy="{y}" r="3.4" fill="#DDF7E8" stroke="#18A866" stroke-width="1"/>'
+        )
+    return (
+        '<svg viewBox="0 0 320 420" role="img" aria-label="Decorative DNA double '
+        'helix with molecular nodes" focusable="false">'
+        '<path d="M110 10 C 210 60, 10 110, 110 160 C 210 210, 10 260, 110 310 '
+        'C 210 360, 60 400, 150 410" fill="none" stroke="#18A866" stroke-width="4" '
+        'stroke-linecap="round"/>'
+        '<path d="M210 10 C 110 60, 310 110, 210 160 C 110 210, 310 260, 210 310 '
+        'C 110 360, 260 400, 170 410" fill="none" stroke="#DDF7E8" stroke-width="4" '
+        'stroke-linecap="round"/>'
+        f'<g class="rungs">{"".join(rungs)}</g>'
+        '</svg>'
+    )
+
+
+def _report_nav() -> str:
+    links = "".join(
+        f'<li><a href="#{sid}">{_esc(label)}</a></li>' for sid, label in _NAV_SECTIONS
+    )
+    return (
+        '<nav class="report-nav noprint" aria-label="Report sections">'
+        f'<ul>{links}</ul></nav>'
+    )
+
+
+def _cmp_table_html(sample: str, model: str, block: dict, other_entrez: set) -> str:
+    rows = []
+    for g in block["genes"]:
+        shared = g["entrez_id"] in other_entrez
+        dot = '<span class="shared-dot" title="Also in the other model\'s top 25"></span>' if shared else ""
+        rows.append(
+            (f'<tr class="shared">' if shared else '<tr>')
+            + f'<td class="num"><span class="rank-chip">{_esc(g["rank"])}</span></td>'
+            f'<td>{_esc(g["symbol"])}{dot}</td>'
+            f'<td class="num mono">{_esc(g["entrez_id"])}</td>'
+            f'<td class="num">{_num(g["predicted_geneeffect"])}</td></tr>'
+        )
+    return (
+        '<div class="tablewrap"><table>'
+        f'<caption><span class="mono">{_esc(model)}</span> &mdash; top 25 (independent)</caption>'
+        '<thead><tr><th scope="col">#</th><th scope="col">Gene</th>'
+        '<th scope="col">Entrez</th><th scope="col">Predicted</th></tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody></table></div>'
+    )
+
+
+def _comparison_section(cs: dict) -> str:
+    """Side-by-side independent rankings per sample. Descriptive only; the two
+    lists are never merged into a consensus."""
+    blocks = []
+    for i, sample in enumerate(SAMPLE_ORDER):
+        pca = cs["rankings"][sample]["ridge_pca"]
+        head = cs["rankings"][sample]["ridge_head"]
+        pca_e = {g["entrez_id"] for g in pca["genes"]}
+        head_e = {g["entrez_id"] for g in head["genes"]}
+        shared = sorted(pca_e & head_e, key=lambda e: int(e))
+        only_pca = [g for g in pca["genes"] if g["entrez_id"] not in head_e]
+        only_head = [g for g in head["genes"] if g["entrez_id"] not in pca_e]
+
+        overlap_rows = ""
+        if shared:
+            head_by = {g["entrez_id"]: g for g in head["genes"]}
+            pca_by = {g["entrez_id"]: g for g in pca["genes"]}
+            trs = []
+            for e in sorted(shared, key=lambda e: pca_by[e]["rank"]):
+                gp, gh = pca_by[e], head_by[e]
+                d = gh["rank"] - gp["rank"]
+                trs.append(
+                    f'<tr><td>{_esc(gp["symbol"])}</td><td class="num mono">{_esc(e)}</td>'
+                    f'<td class="num">{gp["rank"]}</td><td class="num">{gh["rank"]}</td>'
+                    f'<td class="num">{("+" + str(d)) if d > 0 else str(d)}</td>'
+                    f'<td class="num">{_num(round(gh["predicted_geneeffect"] - gp["predicted_geneeffect"], 10))}</td></tr>'
+                )
+            overlap_rows = (
+                '<div class="tablewrap"><table><caption>Shared genes &mdash; rank and '
+                'predicted-value differences (ridge_head &minus; ridge_pca). Descriptive only.'
+                '</caption><thead><tr><th scope="col">Gene</th><th scope="col">Entrez</th>'
+                '<th scope="col">pca rank</th><th scope="col">head rank</th>'
+                '<th scope="col">rank &Delta;</th><th scope="col">pred &Delta;</th></tr></thead>'
+                f'<tbody>{"".join(trs)}</tbody></table></div>'
+            )
+        else:
+            overlap_rows = ('<p class="small">No gene appears in both models’ top 25 for '
+                            f'{_esc(sample)}.</p>')
+
+        chips_pca = "".join(f'<li>{_esc(g["symbol"])} <span class="mono small">#{g["rank"]}</span></li>'
+                            for g in only_pca)
+        chips_head = "".join(f'<li>{_esc(g["symbol"])} <span class="mono small">#{g["rank"]}</span></li>'
+                             for g in only_head)
+        blocks.append(
+            f'<div class="cmp-view" id="cmp-{_esc(sample)}" role="region" '
+            f'aria-label="Model comparison for {_esc(sample)}"{"" if i == 0 else " hidden"}>'
+            f'<p class="small">Sample <span class="mono">{_esc(sample)}</span>. '
+            f'<strong>{len(shared)}</strong> of 25 genes appear in both models’ top 25.</p>'
+            f'<div class="cmp-grid">{_cmp_table_html(sample, "ridge_pca", pca, head_e)}'
+            f'{_cmp_table_html(sample, "ridge_head", head, pca_e)}</div>'
+            f'{overlap_rows}'
+            '<div class="cmp-grid">'
+            f'<div><h3>Only in ridge_pca ({len(only_pca)})</h3><ul class="chip-list">{chips_pca}</ul></div>'
+            f'<div><h3>Only in ridge_head ({len(only_head)})</h3><ul class="chip-list">{chips_head}</ul></div>'
+            '</div></div>'
+        )
+    return (
+        '<section id="section-comparison"><h2>Model comparison &mdash; two independent rankings</h2>'
+        '<p class="callout"><b class="t">Descriptive UI comparison only</b>'
+        'Each model keeps its own frozen ranking, rank 1 &rarr; 25. Overlap and '
+        'rank-difference figures below are descriptive comparisons &mdash; '
+        '<strong>not new performance evaluations</strong> &mdash; and the two lists are '
+        '<strong>never merged into a consensus</strong>. Switch sample with the controls above.</p>'
+        f'{"".join(blocks)}'
+        '</section>'
+    )
+
+
 def render_html(bundle: dict) -> str:
     cs = bundle["case_study"]
     p1 = bundle["phase1"]
@@ -562,30 +843,72 @@ def render_html(bundle: dict) -> str:
     osteo = cs["osteosarcoma_validation_aggregate"]
     rm = cs["reconstructed_models"]
 
-    # ---- A. header ---------------------------------------------------
-    header = (
-        '<header id="section-header">'
+    # ---- A. hero + plain-language intro ----------------------------
+    hero = (
+        '<div class="hero"><div class="wrap"><div class="hero__grid">'
+        '<div class="hero__copy">'
+        '<p class="hero__eyebrow">Computational biology &middot; research demonstration</p>'
         f'<h1>{_esc(cs["title"])}</h1>'
+        f'<p class="hero__lede">{_esc(cs["description"])} Every number on this page is '
+        'read from a frozen, hash-pinned artifact &mdash; no model runs here.</p>'
+        '<p class="hero__answer"><b>Answer</b> The Geneformer head did not outperform '
+        'the expression / PCA baseline.</p>'
+        '</div>'
+        f'<div class="hero__art">{_helix_svg()}</div>'
+        '</div></div></div>'
+    )
+    header = (
+        '<section id="section-header"><h2 class="sr-only">Overview</h2>'
         f'<p class="banner" role="note">{_esc(NOT_CLINICAL)}</p>'
-        f'<p>{_esc(cs["description"])}</p>'
+        '<p>In plain language: a high-school capstone asked whether a large pretrained '
+        'single-cell transformer (Geneformer), used as a frozen feature extractor, '
+        'predicts a cancer cell line’s <strong>CRISPR gene dependencies</strong> '
+        'better than a simple linear model on that cell line’s gene-expression '
+        'profile. <strong>CRISPR GeneEffect</strong> is a per-gene knockout-screen score: '
+        'near 0 means little effect, strongly negative means the cell line depended on '
+        'the gene. <span class="mono">ridge_pca</span> is ridge regression on 200 PCA '
+        'components of expression; <span class="mono">ridge_head</span> is the same ridge '
+        'on the 768-dim Geneformer embedding of the same cell line.</p>'
+        '<p><strong>Evaluation</strong> compares predictions to measured outcomes on '
+        'held-out data (Phase 1). A <strong>prediction</strong> is a model output where '
+        'the outcome may be unknown. This page shows predictions for two samples with '
+        'deliberately different roles &mdash; only one has measured outcomes, attached '
+        'after the fact.</p>'
         '<p>Every number here is a <strong>predicted CRISPR gene-dependency</strong> '
-        'estimate (how much a cell line is predicted to depend on losing a gene). '
-        'It is <strong>not</strong> a prediction of treatment response, drug efficacy, '
-        'or clinical outcome.</p>'
+        'estimate. It is <strong>not</strong> a prediction of treatment response, drug '
+        'efficacy, or clinical outcome. Interactive protein structures for these genes '
+        'are not available in this offline file &mdash; they need the connected '
+        '<span class="mono">ui/</span> application (see Methods).</p>'
         f'<p class="small">Rendered from <span class="mono">case_study.json</span> '
         f'(schema <span class="mono">{_esc(cs["schema_version"])}</span>, sha256 '
         f'<span class="mono">{_esc(bundle["case_study_sha256"])}</span>); '
         f'case-study source commit <span class="mono">{_esc(cs["source_commit"])}</span>. '
         'No inference, evidence lookup, or recomputation happens in this page.</p>'
-        '</header>'
+        '</section>'
     )
 
     # ---- B. frozen Phase 1 result ---------------------------------
+    cards = (
+        '<div class="cards">'
+        f'<div class="card"><p class="v">{_int(p1["n_cell_lines"])}</p>'
+        '<p class="k">Validation cell lines</p><p class="s">held out; patient-grouped split</p></div>'
+        f'<div class="card"><p class="v">{_int(p1["n_targets"])}</p>'
+        '<p class="k">Predicted targets</p><p class="s">selective CRISPR dependencies</p></div>'
+        f'<div class="card card--strong"><p class="v">{_num(p1["baseline_rho"])}</p>'
+        '<p class="k">ridge_pca mean Spearman</p><p class="s">ridge on 200 PCA components</p></div>'
+        f'<div class="card card--strong"><p class="v">{_num(p1["head_rho"])}</p>'
+        '<p class="k">ridge_head mean Spearman</p><p class="s">ridge on Geneformer embedding</p></div>'
+        f'<div class="card card--delta"><p class="v">{_num(p1["delta_mean"])}</p>'
+        '<p class="k">Delta (head &minus; baseline)</p>'
+        f'<p class="s">95% CI [{_num(p1["delta_ci_low"])}, {_num(p1["delta_ci_high"])}]</p></div>'
+        '</div>'
+    )
     phase1 = (
         '<section id="section-phase1"><h2>B. Frozen Phase 1 result</h2>'
         '<p>The pre-specified Phase 1 comparison, on the DepMap validation split '
         f'({_esc(p1["n_cell_lines"])} held-out cell lines, {_esc(p1["n_targets"])} '
         'targets), per-target Spearman correlation:</p>'
+        f'{cards}'
         '<div class="panel"><div class="kv">'
         f'<div>ridge-on-PCA expression (ridge_pca)</div><div>mean Spearman <strong>{_num(p1["baseline_rho"])}</strong></div>'
         f'<div>Geneformer head (ridge_head)</div><div>mean Spearman <strong>{_num(p1["head_rho"])}</strong></div>'
@@ -637,11 +960,13 @@ def render_html(bundle: dict) -> str:
         '<option value="none_in_filtered_snapshot">none in filtered snapshot</option>'
         '</select></div>'
         '<div class="field"><span class="sr-only">Bulk controls</span>'
+        '<button type="button" id="reset-filters" class="secondary" disabled>Reset filters</button> '
         '<button type="button" id="expand-all" class="secondary">Expand all evidence</button> '
         '<button type="button" id="collapse-all" class="secondary">Collapse all</button> '
-        '<button type="button" id="print-btn" class="secondary">Print</button></div>'
+        '<button type="button" id="print-btn" class="secondary">Print / Save as PDF</button></div>'
         '</form>'
-        '<p class="small" id="result-count" aria-hidden="true">25 of 25 genes shown</p>'
+        '<p class="small"><span class="result-count" id="result-count" aria-hidden="true">25 of 25 genes shown</span>'
+        '<span class="filter-flag" id="filter-flag" hidden> &middot; filters active</span></p>'
         '<p class="sr-only" id="status-live" role="status" aria-live="polite"></p>'
         '<p class="small">ridge_pca and ridge_head are shown separately and their '
         'rankings are <strong>never combined into a single consensus list</strong>.</p>'
@@ -655,8 +980,12 @@ def render_html(bundle: dict) -> str:
         '<section id="section-table"><h2>E &amp; F. Ranked dependency table and '
         f'{_esc(EVIDENCE_LABEL)}</h2>'
         f'<p><strong>{_esc(RANKING_HINT)}</strong> The table lists predicted '
-        'dependencies, never therapeutic targets. Use the controls above to switch '
+        'dependencies, never therapeutic targets. Search and evidence filters hide '
+        'rows; they never re-order or renumber them. Use the controls above to switch '
         'sample / model, search, or filter by evidence status.</p>'
+        '<div id="no-results" role="status"><b>No genes match the current search and '
+        'filters.</b> The frozen top-25 ranking is unchanged &mdash; every row is simply '
+        'hidden. Use <em>Reset filters</em> above.</div>'
         f'<div id="views">{views}</div>'
         '</section>'
     )
@@ -824,11 +1153,24 @@ def render_html(bundle: dict) -> str:
                      for k, v in sorted(p1["source_files"].items()))
             + '</div>')
         + _collapsible(
+            "Connected application (interactive protein structures)",
+            '<p>This offline file cannot load live protein structures. The connected '
+            '<span class="mono">ui/</span> React application adds an interactive 3D viewer '
+            'for the protein encoded by a selected gene: it maps the Entrez Gene ID to a '
+            'reviewed human UniProt entry, lists experimental RCSB PDB structures, falls '
+            'back to an AlphaFold predicted model (clearly labelled as predicted), and '
+            'renders it with Mol*. Structure retrieval is separate from prediction and '
+            'never changes a ranking; a predicted structure is structural evidence about '
+            'the protein, not drug-response evidence. Run it with '
+            '<span class="mono">cd ui &amp;&amp; npm install &amp;&amp; npm run dev</span>.</p>')
+        + _collapsible(
             "Limitations and disclaimers",
             f'<ul>{lim_items}</ul><ul style="list-style:none;padding-left:0">{dis_items}</ul>',
             open_=True)
         + '</section>'
     )
+
+    comparison = _comparison_section(cs)
 
     embedded = _json_for_script(cs)
     doc = (
@@ -836,17 +1178,23 @@ def render_html(bundle: dict) -> str:
         '<html lang="en">\n<head>\n'
         '<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        '<meta name="color-scheme" content="light">\n'
         f'<title>{_esc(cs["title"])}</title>\n'
         f'<style>{_CSS}</style>\n'
         '</head>\n<body>\n'
-        '<main>\n'
-        f'{header}\n{phase1}\n{selectors}\n{table_section}\n{interp}\n{osteo_sec}\n{methods}\n'
-        '<footer class="small"><hr>'
+        '<a class="skip-link" href="#section-header">Skip to report content</a>\n'
+        f'{hero}\n{_report_nav()}\n'
+        '<main>\n<div class="wrap">\n'
+        f'{header}\n{phase1}\n{selectors}\n{table_section}\n{comparison}\n{interp}\n'
+        f'{osteo_sec}\n{methods}\n'
+        '<footer class="small">'
         f'Self-contained offline report ({_esc(REPORT_SCHEMA)}). No external runtime '
-        'dependency. External links (PubMed, source, licence) are optional and the '
-        'report is complete without internet access.'
+        'dependency, no network, no CDN. External links (PubMed, source, licence) are '
+        'optional and the report is complete without internet access. Interactive '
+        'protein structures require the connected <span class="mono">ui/</span> '
+        'application.'
         '</footer>\n'
-        '</main>\n'
+        '</div>\n</main>\n'
         f'<script type="application/json" id="case-study-data">{embedded}</script>\n'
         f'<script>{_JS}</script>\n'
         '</body>\n</html>\n'
@@ -992,11 +1340,21 @@ def validate(path: Path | None = None, *, verbose: bool = True) -> dict:
 
     # ---- 4. required sections + warnings --------------------------
     required_ids = ["section-header", "section-phase1", "section-samples",
-                    "section-models", "section-table", "section-interpretation",
-                    "section-osteo", "section-methods"]
+                    "section-models", "section-table", "section-comparison",
+                    "section-interpretation", "section-osteo", "section-methods"]
     chk("all required <section> anchors present",
         all(f'id="{i}"' in doc for i in required_ids),
         ",".join(i for i in required_ids if f'id="{i}"' not in doc))
+    # every sticky-nav link must point at a section that exists
+    nav_block = re.search(r'<nav class="report-nav[^>]*>.*?</nav>', doc, flags=re.S)
+    nav_hrefs = re.findall(r'href="#([^"]+)"', nav_block.group(0)) if nav_block else []
+    nav_ok = (
+        nav_block is not None
+        and [sid for sid, _ in _NAV_SECTIONS] == nav_hrefs
+        and all(f'id="{sid}"' in doc for sid, _ in _NAV_SECTIONS)
+    )
+    chk("sticky section nav present and links resolve", nav_ok,
+        "" if nav_ok else f"nav hrefs {nav_hrefs}")
     required_text = [
         NOT_CLINICAL, RANKING_HINT, EVIDENCE_LABEL,
         "did not outperform the expression",
@@ -1009,6 +1367,12 @@ def validate(path: Path | None = None, *, verbose: bool = True) -> dict:
         "cell line is not a performance estimate",
         "Commensurability with the historical Phase 1 embeddings is not",
         "read at build time from the committed artifacts",
+        # redesign additions
+        "no model runs here",
+        "connected",
+        "not new performance evaluations",
+        "never merged into a consensus",
+        "Interactive protein structures require the connected",
     ]
     missing_text = [t for t in required_text if t not in doc]
     chk("all required headline / warning strings present", not missing_text, str(missing_text))
@@ -1193,7 +1557,19 @@ _SMOKE_HARNESS = """
     var shown=Array.prototype.filter.call(view.querySelectorAll("tr.gene-row"),
               function(r){return !r.classList.contains("hidden-row");}).length;
     checks.push(["search-filter", totalRows===25 && shown>=1 && shown<totalRows]);
+    // reset-filters button clears the search and restores all rows
+    var rb=document.getElementById("reset-filters");
+    rb.click();
+    var afterReset=Array.prototype.filter.call(view.querySelectorAll("tr.gene-row"),
+              function(r){return !r.classList.contains("hidden-row");}).length;
+    checks.push(["reset-filters", s.value==="" && afterReset===25 && rb.disabled===true]);
+    // no-results empty state on a non-matching search
+    s.value="zzzznomatch"; s.dispatchEvent(new Event("input",{bubbles:true}));
+    var nr=document.getElementById("no-results");
+    checks.push(["empty-state", nr && nr.classList.contains("on")]);
     s.value=""; s.dispatchEvent(new Event("input",{bubbles:true}));
+    // model-comparison view tracks the sample selector
+    checks.push(["cmp-view", visible("cmp-BG003082") && !visible("cmp-ACH-000364")]);
     // evidence-status filter
     var f=document.getElementById("evi-status");
     f.value="cited"; f.dispatchEvent(new Event("change",{bubbles:true}));
