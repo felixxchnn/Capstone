@@ -433,13 +433,18 @@ wider grid would let the slide say "we checked" rather than "we think." ~20 minu
 
 ### 9.6 Then
 
-E1 (§9.3) is now done and committed; E3 (§9.5) is done. Freeze the model set in writing,
-dated — `ridge_pca`, `ridge_head`, `lineage_mean`, `global_mean`, `mlp_head`, and the E1
-random-projection control, with E1/E3 labelled exploratory. Then F1 (test split, once, all models together),
-F2 (osteosarcoma — `analysis.py`'s saved-prediction machinery gives this nearly free by
-resampling osteosarcoma rows instead of all 170; **5**, not ~4, val-split osteosarcoma lines,
-state n explicitly), F3 (narrative and slides — the actual deliverable, draft complete two
-weeks before).
+E1 (§9.3) is now done and committed; E3 (§9.5) is done. **The written model-set freeze was
+completed on 2026-09-03** — `capstone/model-set-freeze-2026-09-03.md` (dated, pinned to
+commit `5fbf342`): `ridge_pca`, `ridge_head`, `lineage_mean`, `global_mean`, `mlp_head`,
+and the E1 random-projection control, with E1/E3 labelled exploratory (`mlp_head` frozen
+as-is — no wider MLP grid was ever predeclared). F1-eligible models: `ridge_pca`,
+`ridge_head`, `lineage_mean`, `global_mean`, `mlp_head`; E1 stays validation-only (no
+`--split test` path). **The next research-core step is the separately authorized one-time
+F1 evaluation** (test split, once, all F1-eligible models together — locked commands in
+§10 of the freeze document, not yet run). Then F2 (osteosarcoma — `analysis.py`'s
+saved-prediction machinery gives this nearly free by resampling osteosarcoma rows instead
+of all 170; **5**, not ~4, val-split osteosarcoma lines, state n explicitly), F3 (narrative
+and slides — the actual deliverable, draft complete two weeks before).
 
 ### 9.7 Phase 2 — precision-oncology proof-of-concept demo
 
