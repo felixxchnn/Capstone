@@ -600,6 +600,33 @@ model inference; no test CRISPR outcomes were loaded for evaluation; no test pre
 rankings, metrics, or performance results were computed or reported; and no model or
 hyperparameter decision was made using test data.
 
+### 9.8 Upload-enabled exploratory inference mode — approved scope, NOT YET IMPLEMENTED
+
+**Approved 2026-09-03** (`capstone/scope-decisions.md`, 2026-09-03 entry;
+`capstone/upload-inference-scope-proposal-2026-09-03.md`, marked *APPROVED — NOT YET
+IMPLEMENTED*). A narrowly bounded application-layer extension: a user uploads **one**
+supported research gene-expression profile (**GCT v1.2** `.gct`/`.gct.gz`, **Ensembl** IDs,
+**linear TPM explicitly declared**), the `ui/` backend aligns it to the frozen
+18,460-feature space by **calling `sample_profile.load_external_sample` unmodified**, runs
+the **frozen `ridge_pca`** model via `fitted_artifacts` closed-form `predict()` (no
+fitting, no retraining, no alpha selection, no target change, no test-split access), and
+returns a **session-scoped, non-persisted** top-25 exploratory dependency ranking with
+provenance, drug–gene evidence retrieved **after** the ranking, and explicit limitations
+(`prediction_status = exploratory_user_upload`, `outcome_status = unavailable`). Output is
+research decision support — **not** treatment-response prediction, treatment
+recommendation, drug-efficacy prediction, clinical validation, or medical advice.
+
+This changes the application's **input** and **runtime behaviour** only. It does **not**
+change the Phase 1 research question, dataset, prediction target, evaluation metric, frozen
+split, negative result, or interpretation. The static two-sample demo is unchanged and is
+the default/fallback. A precomputed-embedding → `ridge_head` path is an **optional
+subordinate second slice** only after the first slice ships and passes the proposal's
+`G1`–`G6` gates (notably **G1**: feeding the committed BG003082 GCT through the upload path
+must reproduce `case_study.json`'s `rankings["BG003082"]["ridge_pca"]` top-25 exactly).
+Arbitrary CSV/datasets, batch upload, and local raw-expression→Geneformer inference are
+out of scope / deferred. **No implementation exists yet** — no upload backend, UI,
+`ApiDataSource`, `runInference`, or `/api/**` endpoint.
+
 ---
 
 ## 10. Do not

@@ -227,3 +227,124 @@ fitted-model artifacts, evidence snapshot, and E1 result untouched.
 
 **Record:** approved and implemented 2026-08-31. Node.js v22.23.2 was installed as a
 portable extract at `C:\Users\Leo He\tools\node` to build `ui/`.
+
+---
+
+## 2026-09-03 — Upload-enabled exploratory inference mode (application layer; NOT YET IMPLEMENTED)
+
+**Approved by:** Felix, 2026-09-03, in a message that explicitly records approval of "a
+narrowly defined application-layer scope extension called 'Upload-enabled exploratory
+inference mode'" and states it "does not alter the Phase 1 research question, dataset,
+prediction target, metric, negative result, frozen split, or scientific interpretation."
+Detailed contract: `capstone/upload-inference-scope-proposal-2026-09-03.md` (marked
+**APPROVED — NOT YET IMPLEMENTED**).
+
+**Status:** approval of scope only. **No code was written.** No upload backend, upload UI,
+`ApiDataSource`, `runInference` method, or `/api/**` endpoint exists. This session recorded
+the scope, resolved E3, and wrote the model-set freeze; implementation is a separate,
+separately-authorized session gated on `G1`–`G6` in the proposal.
+
+**Current approved scope before this change:** Phase 1 is the validated scientific core
+(frozen negative result: `ridge_pca` 0.2356 vs `ridge_head` 0.2047, Δ −0.0308, 95% CI
+[−0.0365, −0.0255]). The Phase 2 application layer (`sample_profile.py`, `evidence.py`,
+`reconstruct_fitted.py` / `fitted_artifacts.py`, `case_study.py` → `case_study.json`,
+`report.py` → `phase2_report.html`, `ui/`, `checks.py` §9–12) is complete and validated.
+Both interfaces **display** the committed `case_study.json` and run **no** inference;
+`ApiDataSource.contract.md` documents a future backend seam with nothing implemented.
+
+**Change:** add an **upload-enabled exploratory inference mode** to the connected `ui/`
+app. A user uploads **one** supported research gene-expression profile; the backend
+validates it, aligns it to the frozen 18,460-feature space using the **same**
+`sample_profile.load_external_sample` code the committed pipeline uses, runs the **frozen
+`ridge_pca`** model with `fitted_artifacts` closed-form `predict()` (no fitting, no
+retraining, no alpha selection, no target change, no test-split access), and returns a
+**session-scoped, non-persisted** top-25 exploratory dependency ranking with full
+provenance, drug–gene interaction evidence retrieved **after** the ranking, and explicit
+limitations. Output is **research decision support**, not treatment-response prediction,
+treatment recommendation, drug-efficacy prediction, clinical validation, or medical
+advice.
+
+**Why:** Felix's stated goal is to let a researcher see the frozen model's exploratory
+output on their own research expression profile — extending the existing
+"possible-future-workflow" demonstration from two fixed samples to a
+bring-your-own-profile demonstration, without adding any scientific claim.
+
+**Material-change checklist (CLAUDE.md §13):**
+
+- *Population / unit of analysis:* **changes at the application layer only.** Phase 1 stays
+  1,140 DepMap cell lines. Phase 2 adds one user-supplied research expression profile per
+  request, handled exactly as BG003082 is — exploratory, external, no ground truth, not a
+  patient, not a cohort. No Phase 1 statistic is computed over it.
+- *Input data:* **changes.** Adds one user-supplied **GCT v1.2** (`.gct` / `.gct.gz`),
+  **Ensembl**-identified, **linear-TPM** (explicitly declared by the user, never inferred)
+  expression profile per request. Processed locally, transmitted to no third party,
+  **retained nothing by default**. No committed data is added or changed.
+- *Prediction target / label:* **unchanged.** The frozen 4,297 selective CRISPR
+  gene-effect targets in their frozen order. No new target, no re-selection.
+- *Evaluation metric:* **unchanged and not exercised.** An uploaded sample has no CRISPR
+  ground truth; nothing is scored, no metric is computed or displayed for it
+  (`outcome_status = unavailable`).
+- *Intended user / use case:* **changes at the application layer.** Adds a researcher who
+  wants the frozen model's exploratory output on their own research profile. **Not**
+  clinicians, **not** patients, **not** clinical decision-making.
+- *Scientific claim:* **none added.** The only new statement is *"here is what the frozen
+  `ridge_pca` model ranks as predicted dependencies for your research profile, under a
+  documented domain shift, with no ground truth and no validation for your sample."* No
+  claim about model performance, generalisation, therapeutic relevance, or efficacy.
+- *Experimental / patient-level / clinical evidence distinction:* **preserved.** Every
+  uploaded result is `prediction_status = exploratory_user_upload`,
+  `outcome_status = unavailable`, carries the cultured-cell-line-vs-your-sample
+  domain-shift caveat and the training-mean-imputation disclosure, and carries the fixed
+  non-efficacy disclaimer. Drug–gene evidence stays retrieval, retrieved **after** the
+  ranking, never framed as efficacy or a treatment. `ridge_pca` and `ridge_head` are never
+  merged.
+- *Runtime behaviour:* **changes.** Adds a local Python inference path (validate → align →
+  closed-form `predict` → rank → evidence) invoked on a user request. The static
+  two-sample demonstration is unchanged and remains the **default / fallback** mode.
+
+**Boundary (approved):**
+
+- **Required first slice:** single-sample GCT → frozen `ridge_pca` inference only,
+  session-scoped, no persistence, pre-upload PHI/patient-identifier warning.
+- **Optional, subordinate second slice:** a validated precomputed 768-dim Geneformer
+  embedding upload → `ridge_head` — **only after** the first slice is implemented and
+  validated (proposal gates `G1`–`G6`). Not required for the first implementation.
+- **Deferred (not October):** constrained CSV/TSV expression matrix; multi-sample / batch
+  upload.
+- **Out of scope (unchanged):** arbitrary CSV / arbitrary datasets; raw-expression →
+  Geneformer inference; model fitting / fine-tuning / alpha selection; target changes; any
+  test-split evaluation or test-set-driven development; treatment-response prediction;
+  drug-efficacy scoring; treatment recommendations; pharmacogenomic safety prediction;
+  patient-specific clinical guidance; clinical-record ingestion; user accounts / cloud
+  storage; a free-form medical chatbot; silently merged model rankings.
+
+**Mandatory pre-release regression gate:** passing the committed
+`data/external/sid_osteosarc/BG003082.gene_tpm.gct.gz` through the new upload path must
+reproduce `data/processed/case_study.json`'s `rankings["BG003082"]["ridge_pca"]` top-25
+**exactly** (rank, entrez_id, symbol, predicted GeneEffect at committed precision, same
+ranking-rule semantics). Any difference fails validation and blocks release. The alignment
+path must **call** `sample_profile.load_external_sample` unmodified — matching
+dimensionality / feature order alone is insufficient; exact preprocessing compatibility
+must be proven.
+
+**Alternatives considered and rejected:**
+- Keeping the interfaces static-only (no scope change, zero new failure surface) —
+  rejected: it does not meet the approved goal of a bring-your-own-profile demonstration.
+- Supporting arbitrary CSV / arbitrary datasets on day one — rejected: unbounded parsing
+  and identifier-ambiguity surface; a constrained schema is deferred future work.
+- Local Geneformer embedding generation for `ridge_head` on uploads — rejected for
+  October: needs `geneformer` + a GPU; a separate async/GPU extension with its own §13
+  entry.
+
+**No test evaluation occurred, and none is enabled by this decision.** No test-split
+expression features, outcomes, predictions, rankings, metrics, or performance numbers were
+read, computed, or displayed. The approved upload path has no test-split code path
+(proposal gate `G4`).
+
+**Protected artifacts:** unchanged. This is a scope-recording decision; `case_study.json`
+(`a962c01a…`), `phase2_report.html` (`91fbb016…`), `random_projection_results.json`
+(`4adfb78b…`), all Phase 1 result artifacts, fitted-model artifacts, and the evidence
+snapshot are untouched. `py checks.py` remains 55/55.
+
+**Record:** scope approved 2026-09-03. Implementation deferred to a separately authorized
+session and gated on `G1`–`G6` in `capstone/upload-inference-scope-proposal-2026-09-03.md`.
